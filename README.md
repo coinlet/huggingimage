@@ -201,6 +201,32 @@ docker run -d --name grokimage \
 
 迁移到不便构建镜像的机器，可先 `docker save -o grokimage.tar grokimage:latest`，再在目标机器 `docker load -i grokimage.tar`；镜像架构应与目标机器匹配。
 
+### Linux 服务器：宿主机联网正常、bridge 容器连接超时
+
+若容器已经解析出 IP，但 `curl` 卡在 `Trying ...:443`，而宿主机访问同一地址正常，需排查 Docker 转发、NAT 和防火墙。可以先使用项目提供的独立 host 网络配置，让应用直接使用宿主机网络：
+
+```bash
+docker compose -f compose.host.yaml up -d --no-build --pull never
+```
+
+该文件单独使用，不与默认 `compose.yaml` 合并。以上命令复用服务器上已有的 `grokimage:latest` 镜像，无需为切换网络重新构建。保持相同的项目目录、`.env` 和 Compose 项目名，即沿用原 `imagine-data` 数据卷；如果原来使用 `-p` 指定项目名，切换时仍需使用相同的 `-p`。不要执行 `down -v`。
+
+host 模式适用于 Linux Docker Engine。它共享宿主机的网络命名空间，不使用 `ports` 映射；`PUBLISH_HOST` 和 `PUBLISH_PORT` 会直接成为进程的监听地址和端口，默认仍是 `127.0.0.1:3001`。可继续使用反向代理；直接从公网访问时设置 `PUBLISH_HOST=0.0.0.0`。目标端口必须未被其他进程占用。
+
+独立配置也为镜像构建设置 `build.network: host`，后续需要重新构建时，构建阶段的联网同样使用宿主机网络。
+
+此方式绕过 bridge，不修改宿主机防火墙或自行处理 DNS；网络隔离也相应减少。它是部署替代方案，不会修复服务器上其他容器的 bridge 网络。后续更新、日志与停止操作继续带相同的配置文件：
+
+```bash
+docker compose -f compose.host.yaml logs -f --tail=100
+docker compose -f compose.host.yaml ps
+docker compose -f compose.host.yaml up -d --build
+```
+
+排查 bridge 本身时，在宿主机检查 `sysctl net.ipv4.ip_forward`、`iptables -S FORWARD`、`iptables -S DOCKER-USER` 和 `iptables -t nat -S POSTROUTING`（nftables 后端查看对应 nftables 规则）。先根据实际规则定位，不直接清空防火墙或把所有转发改为 ACCEPT。
+
+参考：[Docker host 网络](https://docs.docker.com/engine/network/drivers/host/)、[Docker 防火墙与 NAT](https://docs.docker.com/engine/network/packet-filtering-firewalls/)。
+
 ## 验证
 
 ```bash

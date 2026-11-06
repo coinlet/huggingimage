@@ -1,0 +1,23 @@
+# Standalone Linux host-network deployment; use -f compose.host.yaml alone.
+services:
+  imagine:
+    image: grokimage:latest
+    build:
+      context: .
+      network: host
+    init: true
+    network_mode: host
+    environment:
+      HOST: ${PUBLISH_HOST:-127.0.0.1}
+      PORT: ${PUBLISH_PORT:-3001}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN in .env before starting Docker}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      CONFIG_AI_BASE_URL: ${CONFIG_AI_BASE_URL:-}
+      CONFIG_AI_MODEL: ${CONFIG_AI_MODEL:-}
+      CONFIG_AI_API_KEY: ${CONFIG_AI_API_KEY:-}
+    volumes:
+      - imagine-data:/app/data
+    restart: unless-stopped
+    stop_grace_period: 10s
+volumes:
+  imagine-data:
