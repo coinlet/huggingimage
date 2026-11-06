@@ -1,0 +1,15 @@
+node_modules/
+dist/
+data/
+artifacts/
+backups/
+.env
+.env.*
+.git/
+.agents/
+.codex/
+.aws/
+*.log
+*.tar
+*.tar.gz
+.DS_Store

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+data/
+artifacts/
+backups/
+.env
+.env.*
+!.env.example
+!.env.docker.example
+.agents/
+.codex/
+.aws/
+*.log
+*.tar
+*.tar.gz
+.DS_Store
