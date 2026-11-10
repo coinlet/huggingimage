@@ -201,6 +201,39 @@ docker run -d --name grokimage \
 
 迁移到不便构建镜像的机器，可先 `docker save -o grokimage.tar grokimage:latest`，再在目标机器 `docker load -i grokimage.tar`；镜像架构应与目标机器匹配。
 
+### GitHub 自动构建镜像
+
+仓库的 `.github/workflows/docker.yml` 会在推送 `main`、推送 `v*` 标签或手动运行时构建并发布镜像到 **`ghcr.io/coinlet/huggingimage`**，支持 `linux/amd64` 和 `linux/arm64`。PR 仅构建 AMD64 验证，不登录镜像仓库、不发布镜像。构建继续执行 Dockerfile 内的类型检查、单元测试和前端构建，并使用 GitHub Actions 缓存。
+
+- `latest`：跟随 `main`；手动构建其他分支或发布旧版本标签不会覆盖它。
+- `v1.2.3` 标签：发布 `v1.2.3`、`1.2.3`、`1.2` 等版本标签；预发布版本保留完整版本号。
+- `sha-<完整提交 SHA>`：对应具体提交，便于固定版本和回退。
+
+工作流使用 GitHub 自动提供的 `GITHUB_TOKEN` 与 `packages: write` 权限，无需额外配置 Docker Hub 密钥。首次运行可在仓库 **Actions → Docker image** 查看进度，或点击 **Run workflow** 手动构建。若仓库或组织禁止 Actions 写入 Packages，需由仓库管理员允许该权限。GHCR 包默认可能为私有；私有包拉取时需先通过拥有 `read:packages` 权限的个人访问令牌执行 `docker login ghcr.io`。包的可见性由仓库所有者管理，工作流不自动更改。
+
+服务器使用预构建镜像时，保留 `.env` 原有配置，添加：
+
+```dotenv
+IMAGINE_IMAGE=ghcr.io/coinlet/huggingimage:latest
+```
+
+然后执行，无需在服务器上构建：
+
+```bash
+git pull
+docker compose pull
+docker compose up -d --no-build
+```
+
+如果已使用 Linux host 网络部署，继续使用同一配置文件：
+
+```bash
+docker compose -f compose.host.yaml pull
+docker compose -f compose.host.yaml up -d --no-build
+```
+
+保持原目录、Compose 项目名、数据卷及加密密钥，即保留 SQLite 数据库、作品和提供商配置。固定版本时可把 `IMAGINE_IMAGE` 改为 `ghcr.io/coinlet/huggingimage:1.2.3` 或对应的 `sha-...` 标签。留空或删除此变量仍使用本地 `grokimage:latest` 镜像。
+
 ### Linux 服务器：宿主机联网正常、bridge 容器连接超时
 
 若容器已经解析出 IP，但 `curl` 卡在 `Trying ...:443`，而宿主机访问同一地址正常，需排查 Docker 转发、NAT 和防火墙。可以先使用项目提供的独立 host 网络配置，让应用直接使用宿主机网络：

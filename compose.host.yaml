@@ -1,7 +1,7 @@
 # Standalone Linux host-network deployment; use -f compose.host.yaml alone.
 services:
   imagine:
-    image: grokimage:latest
+    image: ${IMAGINE_IMAGE:-grokimage:latest}
     build:
       context: .
       network: host

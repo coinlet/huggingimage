@@ -1,6 +1,6 @@
 services:
   imagine:
-    image: grokimage:latest
+    image: ${IMAGINE_IMAGE:-grokimage:latest}
     build: .
     init: true
     ports:
