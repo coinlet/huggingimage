@@ -30,16 +30,25 @@ export type ImageItem = {
   width: number;
   height: number;
   favorite: boolean;
+  status?: "submitting" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  error?: string;
+  localDraft?: boolean;
   providerName?: string;
   model?: string;
   mode?: string;
   seed?: number;
+  kind?: "upload" | "generated";
+  threadId?: string;
+  parentId?: string;
+  jobId?: string;
   example?: boolean;
   category?: string;
   name?: string;
 };
 export type Job = {
   id: string;
+  sourceId?: string;
+  slotIds?: string[];
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   prompt: string;
   providerName: string;
@@ -91,4 +100,19 @@ export type SpaceDiscovery = {
     missing: string[];
     template: unknown;
   }>;
+};
+
+export type CreationInput = {
+  providerId: string;
+  prompt: string;
+  mode: "generate" | "edit";
+  sourceId?: string;
+  maskId?: string;
+  ratio: string;
+  count: number;
+  negativePrompt: string;
+  seed: string;
+  steps: number;
+  guidance: number;
+  slotIds?: string[];
 };

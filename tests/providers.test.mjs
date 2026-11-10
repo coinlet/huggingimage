@@ -60,7 +60,7 @@ test("secrets are encrypted on disk and absent from provider API representation"
     store.state.providers.push({ id: "test", name: "test", secret });
     store.save();
     assert.equal(
-      readFileSync(path.join(dir, "workspace.json"), "utf8").includes("sk-test-sensitive"),
+      readFileSync(path.join(dir, "workspace.sqlite"), "utf8").includes("sk-test-sensitive"),
       false,
     );
     assert.deepEqual(publicProvider(store.state.providers[0]), {

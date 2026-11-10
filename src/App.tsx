@@ -28,10 +28,13 @@ import {
   PanelLeftClose,
   AlertCircle,
 } from "lucide-react";
-import { api, json, type Provider, type ImageItem, type Job } from "./types";
+import { api, json, type Provider, type ImageItem, type Job, type CreationInput } from "./types";
 import { EXAMPLES } from "./examples";
 import { Settings } from "./Settings";
 import { Modal } from "./Modal";
+import { ImageThread } from "./ImageThread";
+import { ImagePlaceholder } from "./ImagePlaceholder";
+import { newImageId } from "./image-id";
 
 type View = "explore" | "library" | "favorites" | "history";
 const viewLabels = {
@@ -101,6 +104,9 @@ export default function App() {
   const [uploading, setUploading] = useState(false),
     [submitting, setSubmitting] = useState(false),
     [submitError, setSubmitError] = useState("");
+  const [threadJob, setThreadJob] = useState("");
+  const [focusImageId, setFocusImageId] = useState("");
+  const draftRequests = useRef(new Map<string, CreationInput>());
   const [detail, setDetail] = useState<ImageItem | null>(null),
     [deleteId, setDeleteId] = useState<string | null>(null),
     [detailBusy, setDetailBusy] = useState(false);
@@ -124,7 +130,13 @@ export default function App() {
       api<ImageItem[]>("/images"),
       api<Job[]>("/jobs"),
     ]);
-    setImages(nextImages);
+    setImages((all) => [
+      ...all.filter(
+        (image) =>
+          draftRequests.current.has(image.id) && !nextImages.some((next) => next.id === image.id),
+      ),
+      ...nextImages,
+    ]);
     setJobs(nextJobs);
   }, []);
   const loadSession = useCallback(() => {
@@ -222,13 +234,112 @@ export default function App() {
     notify("提示词已放入创作框");
   };
   const editImage = (image: ImageItem) => {
-    setSource(image);
-    setMask(null);
-    setMode("edit");
-    setPrompt("");
-    setDetail(null);
-    textarea.current?.focus();
+    setThreadJob("");
+    setFocusImageId(image.id);
+    setDetail(image);
   };
+  async function submitCreation(input: CreationInput, openPage: boolean, reference?: ImageItem) {
+    const selectedProvider = providers.find((p) => p.id === input.providerId);
+    if (!selectedProvider) throw new Error("请先配置模型提供商");
+    const ids = input.slotIds || Array.from({ length: input.count }, () => newImageId());
+    const request = { ...input, slotIds: ids };
+    const parent =
+      reference ||
+      images.find((i) => i.id === input.sourceId) ||
+      (source?.id === input.sourceId ? source : null);
+    const threadId =
+      images.find((i) => i.id === ids[0])?.threadId ||
+      (input.mode === "edit" ? parent?.threadId || parent?.id || ids[0] : ids[0]);
+    const [rw, rh] = input.ratio.split(":").map(Number);
+    const drafts: ImageItem[] = ids.map((id) => ({
+      id,
+      url: "",
+      thumbnail: "",
+      kind: "generated",
+      status: "submitting",
+      localDraft: true,
+      prompt: input.prompt,
+      providerName: selectedProvider.name,
+      model: selectedProvider.model,
+      mode: input.mode,
+      threadId,
+      parentId: input.mode === "edit" ? input.sourceId : undefined,
+      width: Math.round((1024 * (rw || 1)) / (rh || 1)),
+      height: 1024,
+      favorite: false,
+      createdAt: images.find((i) => i.id === id)?.createdAt || new Date().toISOString(),
+    }));
+    for (const id of ids) draftRequests.current.set(id, request);
+    setImages((all) => [...drafts, ...all.filter((i) => !ids.includes(i.id))]);
+    setFocusImageId(ids[0]);
+    if (openPage) {
+      setDetail(drafts[0]);
+      setThreadJob("");
+    }
+    setView("library");
+    setSearch("");
+    try {
+      const job = await api<Job>("/jobs", json("POST", request));
+      setJobs((all) => [job, ...all]);
+      for (const id of ids) draftRequests.current.delete(id);
+      setImages((all) =>
+        all.map((i) =>
+          ids.includes(i.id) ? { ...i, localDraft: false, status: "queued", jobId: job.id } : i,
+        ),
+      );
+      if (openPage) setThreadJob(job.id);
+      void refreshWork().catch((e) => notify(e.message));
+      return job;
+    } catch (error) {
+      // The request may have reached the server even if its response was lost.
+      try {
+        const savedJobs = await api<Job[]>("/jobs");
+        const accepted = savedJobs.find((job) => job.slotIds?.includes(ids[0]));
+        if (accepted) {
+          for (const id of ids) draftRequests.current.delete(id);
+          setJobs(savedJobs);
+          await refreshWork();
+          return accepted;
+        }
+      } catch {
+        /* Keep the local failure available for retry when offline. */
+      }
+      setImages((all) =>
+        all.map((i) =>
+          ids.includes(i.id) ? { ...i, status: "failed", error: (error as Error).message } : i,
+        ),
+      );
+      throw error;
+    }
+  }
+  async function retryImage(image: ImageItem) {
+    const draft = draftRequests.current.get(image.id);
+    if (draft) return submitCreation({ ...draft, count: 1, slotIds: [image.id] }, false);
+    const job = await api<Job>(`/images/${image.id}/retry`, json("POST"));
+    setJobs((all) => [job, ...all]);
+    setFocusImageId(image.id);
+    await refreshWork();
+    return job;
+  }
+  async function editInThread(image: ImageItem, editPrompt: string) {
+    if (!provider?.enabled || !provider.supportsEdit) throw new Error("请选择支持图片编辑的模型");
+    return submitCreation(
+      {
+        providerId,
+        prompt: editPrompt,
+        mode: "edit",
+        sourceId: image.id,
+        ratio,
+        count,
+        negativePrompt,
+        seed,
+        steps: provider.defaults?.edit?.steps ?? steps,
+        guidance: provider.defaults?.edit?.guidance ?? guidance,
+      },
+      false,
+      image,
+    );
+  }
   async function upload(file: File | undefined, isMask = false) {
     if (!file) return;
     if (
@@ -282,26 +393,22 @@ export default function App() {
     }
     setSubmitting(true);
     try {
-      const job = await api<Job>(
-        "/jobs",
-        json("POST", {
+      await submitCreation(
+        {
           providerId,
-          prompt,
+          prompt: prompt.trim(),
           mode,
           ratio,
           count,
-          sourceId: source?.id,
-          maskId: mask?.id,
+          sourceId: mode === "edit" ? source?.id : undefined,
+          maskId: mode === "edit" ? mask?.id : undefined,
           negativePrompt,
           seed,
           steps,
           guidance,
-        }),
+        },
+        true,
       );
-      setJobs((all) => [job, ...all]);
-      setView("library");
-      setSearch("");
-      notify("创作任务已加入队列");
     } catch (e) {
       setSubmitError((e as Error).message);
     } finally {
@@ -656,15 +763,21 @@ export default function App() {
                         className="image-open"
                         aria-label={`查看${image.name || image.prompt}`}
                         onClick={() => {
+                          setFocusImageId(image.id);
+                          setThreadJob("");
                           setDetail(image);
                           setDeleteId(null);
                         }}
                       >
-                        <img
-                          src={image.thumbnail}
-                          alt={image.name || image.prompt}
-                          loading={index < 4 ? "eager" : "lazy"}
-                        />
+                        {image.status && image.status !== "succeeded" ? (
+                          <ImagePlaceholder image={image} compact />
+                        ) : (
+                          <img
+                            src={image.thumbnail}
+                            alt={image.name || image.prompt}
+                            loading={index < 4 ? "eager" : "lazy"}
+                          />
+                        )}
                       </button>
                       <div className="card-top">
                         <span className="image-label">
@@ -1035,7 +1148,54 @@ export default function App() {
           notify={notify}
         />
       )}
-      {detail && (
+      {detail && !detail.example && (
+        <ImageThread
+          key={detail.id}
+          image={detail}
+          images={images}
+          focusImageId={focusImageId}
+          jobs={jobs}
+          providers={providers}
+          providerId={providerId}
+          followJob={threadJob}
+          onProvider={setProviderId}
+          onClose={() => {
+            setDetail(null);
+            setThreadJob("");
+          }}
+          onEdit={editInThread}
+          onRetry={retryImage}
+          onFavorite={favorite}
+          onCancel={cancel}
+          onSettings={() => setSettings(true)}
+          onUsePrompt={usePrompt}
+          onAdvanced={(image) => {
+            setSource(image);
+            setMask(null);
+            setMode("edit");
+            setPrompt("");
+            setAdvanced(true);
+            setDetail(null);
+            setThreadJob("");
+            textarea.current?.focus();
+          }}
+          onDelete={async (image) => {
+            if (draftRequests.current.has(image.id)) {
+              draftRequests.current.delete(image.id);
+              setImages((all) => all.filter((i) => i.id !== image.id));
+            } else await api(`/images/${image.id}`, json("DELETE"));
+            if (source?.id === image.id) {
+              setSource(null);
+              setMask(null);
+            }
+            setDetail(null);
+            setThreadJob("");
+            await refreshWork();
+            notify("图片已删除，其他版本已保留");
+          }}
+        />
+      )}
+      {detail?.example && (
         <Modal
           title={detail.example ? detail.name || "灵感参考" : "作品详情"}
           onClose={() => setDetail(null)}

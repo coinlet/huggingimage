@@ -276,16 +276,13 @@ test("legacy empty-image generation config migrates once and preserves key, defa
       editTemplate: {},
     });
     store.save();
+    store.close();
     const workspace = createApp({ dataDir: directory, adminToken: "" });
     const list = await dispatch(workspace.app, "/api/providers");
     assert.equal(list.data[0].supportsEdit, true);
     assert.equal(list.data[0].editEndpoint, "/infer");
     workspace.close();
-    assert.equal(
-      JSON.parse(readFileSync(path.join(directory, "workspace.json"))).providers[0]
-        .supportsGenerate,
-      false,
-    );
+    assert.equal(createStore(directory).state.providers[0].supportsGenerate, false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

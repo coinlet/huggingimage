@@ -79,7 +79,7 @@ test(
       assert.equal("secret" in provider, false);
       assert.equal("apiKey" in provider, false);
       assert.equal(
-        readFileSync(path.join(dir, "workspace.json"), "utf8").includes(base.apiKey),
+        readFileSync(path.join(dir, "workspace.sqlite"), "utf8").includes(base.apiKey),
         false,
       );
       assert.equal(
@@ -126,6 +126,39 @@ test(
       assert.equal((await waitJob(edit.data.id)).status, "succeeded");
       assert.ok(Buffer.isBuffer(calls[1].source));
       assert.ok(Buffer.isBuffer(calls[1].mask));
+      const editedJob = await waitJob(edit.data.id);
+      const firstEdit = editedJob.imageIds[0];
+      const secondEdit = await call("/api/jobs", "POST", {
+        providerId: provider.id,
+        prompt: "add sunlight",
+        mode: "edit",
+        sourceId: firstEdit,
+      });
+      const secondJob = await waitJob(secondEdit.data.id);
+      assert.equal(secondJob.status, "succeeded");
+      const branch = await call("/api/jobs", "POST", {
+        providerId: provider.id,
+        prompt: "alternate red",
+        mode: "edit",
+        sourceId: uploaded.data.id,
+      });
+      assert.equal((await waitJob(branch.data.id)).status, "succeeded");
+      const thread = await call(`/api/images/${secondJob.imageIds[0]}/thread`);
+      assert.equal(thread.status, 200);
+      assert.deepEqual(
+        thread.data.map((i) => i.prompt),
+        [undefined, "make it blue", "add sunlight", "alternate red"],
+      );
+      assert.ok(thread.data.every((i) => i.threadId === uploaded.data.id));
+      assert.equal(thread.data[2].parentId, firstEdit);
+      assert.equal(thread.data[3].parentId, uploaded.data.id);
+      assert.equal(thread.data[0].kind, "upload");
+      assert.equal(
+        (await call(`/api/images/${firstEdit}/thread`, "GET", undefined, { cookie: "" })).status,
+        401,
+      );
+      assert.equal((await call("/api/images/missing/thread")).status, 404);
+
       assert.equal(
         (
           await call("/api/jobs", "POST", {

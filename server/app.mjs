@@ -258,6 +258,11 @@ export function createApp(options = {}) {
         .reverse(),
     ),
   );
+  app.get("/api/images/:id/thread", (req, res) => {
+    const image = state.images.find((i) => i.id === req.params.id);
+    if (!image) return res.status(404).json({ error: "图片不存在" });
+    res.json(state.images.filter((i) => i.threadId === image.threadId));
+  });
   async function saveImage(bytes, metadata = {}) {
     if (!bytes.length || bytes.length > 32 * 1024 * 1024) throw new Error("图片为空或超过 32MB");
     const png = await sharp(bytes, { limitInputPixels: 40000000, animated: false })
@@ -265,7 +270,7 @@ export function createApp(options = {}) {
       .png()
       .toBuffer();
     const info = await sharp(png).metadata();
-    const id = randomUUID();
+    const id = metadata.id || randomUUID();
     fs.writeFileSync(path.join(store.directory, "media", `${id}.png`), png, { mode: 0o600 });
     await sharp(png)
       .resize({ width: 640, height: 800, fit: "inside", withoutEnlargement: true })
@@ -281,7 +286,12 @@ export function createApp(options = {}) {
       favorite: false,
       ...metadata,
     };
-    state.images.push(image);
+    image.threadId ||= id;
+    image.status = "succeeded";
+    image.error = undefined;
+    const existing = state.images.findIndex((i) => i.id === id);
+    if (existing < 0) state.images.push(image);
+    else state.images[existing] = image;
     save();
     return image;
   }
@@ -307,6 +317,8 @@ export function createApp(options = {}) {
   app.delete("/api/images/:id", (req, res) => {
     const image = state.images.find((i) => i.id === req.params.id);
     if (!image) return res.status(404).json({ error: "图片不存在" });
+    if (["queued", "running"].includes(image.status))
+      return res.status(409).json({ error: "请先取消生成任务，再删除此图片" });
     if (
       state.jobs.some(
         (j) =>
@@ -328,6 +340,7 @@ export function createApp(options = {}) {
     res.sendFile(path.join(store.directory, "media", req.params.file));
   });
   const running = new Map();
+  let closing = false;
   const RATIOS = {
     "1:1": [1024, 1024],
     "3:2": [1536, 1024],
@@ -358,11 +371,18 @@ export function createApp(options = {}) {
         .json({ error: "此 Space 仅支持图片编辑，请切换到图片编辑并上传参考图" });
     const source = state.images.find((i) => i.id === b.sourceId),
       mask = state.images.find((i) => i.id === b.maskId);
-    if (mode === "edit" && (!provider.supportsEdit || !source))
+    if (
+      mode === "edit" &&
+      (!provider.supportsEdit || !source || (source.status && source.status !== "succeeded"))
+    )
       return res.status(400).json({ error: "编辑需要参考图片，且提供商必须启用编辑能力" });
     if (
       b.maskId &&
-      (!mask || !source || mask.width !== source.width || mask.height !== source.height)
+      (!mask ||
+        (mask.status && mask.status !== "succeeded") ||
+        !source ||
+        mask.width !== source.width ||
+        mask.height !== source.height)
     )
       return res.status(400).json({ error: "蒙版尺寸必须与原图一致" });
     const ratio = Object.hasOwn(RATIOS, b.ratio) ? b.ratio : "1:1";
@@ -370,6 +390,21 @@ export function createApp(options = {}) {
     const guidance = Number(b.guidance ?? 3.5);
     if (!Number.isFinite(guidance) || guidance < 0 || guidance > 30)
       throw new Error("引导系数必须为 0–30");
+    const requestedCount = integer(b.count, 1, 1, 4);
+    const slotIds = b.slotIds ?? Array.from({ length: requestedCount }, () => randomUUID());
+    if (
+      !Array.isArray(slotIds) ||
+      slotIds.length !== requestedCount ||
+      new Set(slotIds).size !== requestedCount ||
+      slotIds.some(
+        (id) =>
+          typeof id !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id),
+      )
+    )
+      return res.status(400).json({ error: "图片标识无效" });
+    if (slotIds.some((id) => state.images.some((image) => image.id === id)))
+      return res.status(409).json({ error: "图片已存在，请刷新查看创作结果" });
     const job = {
       id: randomUUID(),
       providerId: provider.id,
@@ -383,7 +418,8 @@ export function createApp(options = {}) {
       ratio,
       width,
       height,
-      count: integer(b.count, 1, 1, 4),
+      count: requestedCount,
+      slotIds,
       seed:
         b.seed === "" || b.seed == null || Number(b.seed) === -1
           ? randomBytes(4).readUInt32LE() % 2147483647
@@ -394,11 +430,80 @@ export function createApp(options = {}) {
       createdAt: new Date().toISOString(),
       imageIds: [],
     };
+    const threadId = mode === "edit" ? source.threadId || source.id : slotIds[0];
+    for (const id of slotIds)
+      state.images.push({
+        id,
+        kind: "generated",
+        status: "queued",
+        url: "",
+        thumbnail: "",
+        width,
+        height,
+        favorite: false,
+        createdAt: job.createdAt,
+        threadId,
+        parentId: job.sourceId,
+        jobId: job.id,
+        prompt,
+        providerName: job.providerName,
+        model: job.model,
+        mode,
+      });
     state.jobs.push(job);
     save();
     res.status(202).json(job);
     queueMicrotask(pump);
   });
+  app.post("/api/images/:id/retry", (req, res) => {
+    const image = state.images.find((i) => i.id === req.params.id);
+    if (!image) return res.status(404).json({ error: "图片不存在" });
+    const previous = state.jobs.find((j) => j.id === image.jobId);
+    if (!previous || !["failed", "cancelled"].includes(image.status))
+      return res.status(409).json({ error: "仅失败或已取消的图片可以重试" });
+    if (running.has(previous.id))
+      return res.status(409).json({ error: "任务正在结束，请稍后重试" });
+    if (state.jobs.filter((j) => ["queued", "running"].includes(j.status)).length >= 10)
+      return res.status(429).json({ error: "最多可排队 10 个任务" });
+    const provider = state.providers.find((p) => p.id === previous.providerId && p.enabled);
+    if (!provider) return res.status(400).json({ error: "请恢复原模型提供商后重试" });
+    if (
+      previous.sourceId &&
+      !state.images.some(
+        (i) => i.id === previous.sourceId && (!i.status || i.status === "succeeded"),
+      )
+    )
+      return res.status(400).json({ error: "参考图片已删除，无法重试" });
+    if (previous.maskId && !state.images.some((i) => i.id === previous.maskId))
+      return res.status(400).json({ error: "蒙版已删除，无法重试" });
+    const job = {
+      ...previous,
+      id: randomUUID(),
+      retryOf: previous.id,
+      providerName: provider.name,
+      model: provider.model || provider.space,
+      status: "queued",
+      count: 1,
+      slotIds: [image.id],
+      imageIds: [],
+      seed: previous.seed + Math.max(0, previous.slotIds?.indexOf(image.id) ?? 0),
+      createdAt: new Date().toISOString(),
+      startedAt: undefined,
+      completedAt: undefined,
+      error: undefined,
+    };
+    Object.assign(image, { jobId: job.id, status: "queued", error: undefined });
+    state.jobs.push(job);
+    save();
+    res.status(202).json(job);
+    queueMicrotask(pump);
+  });
+  function updateSlots(job, status, error) {
+    for (const id of job.slotIds || []) {
+      const image = state.images.find((i) => i.id === id && i.jobId === job.id);
+      if (image && image.status !== "succeeded") Object.assign(image, { status, error });
+    }
+  }
   app.post("/api/jobs/:id/cancel", (req, res) => {
     const job = state.jobs.find((j) => j.id === req.params.id);
     if (!job) return res.status(404).json({ error: "任务不存在" });
@@ -406,6 +511,7 @@ export function createApp(options = {}) {
       job.status = "cancelled";
       job.completedAt = new Date().toISOString();
       running.get(job.id)?.abort();
+      updateSlots(job, "cancelled", "生成已取消，可以重试");
       save();
     }
     res.json(job);
@@ -418,6 +524,7 @@ export function createApp(options = {}) {
     running.set(job.id, controller);
     job.status = "running";
     job.startedAt = new Date().toISOString();
+    updateSlots(job, "running");
     save();
     let key = "";
     const timeout = setTimeout(
@@ -442,7 +549,8 @@ export function createApp(options = {}) {
           ? spaceRunner(provider, key, job, source, mask, controller.signal)
           : compatibleRunner(provider, key, job, source, mask, controller.signal);
       const urls = await Promise.race([work, abortPromise]);
-      for (const entry of urls) {
+      if (!Array.isArray(urls) || !urls.length) throw new Error("提供商未返回图片，请重试");
+      for (const entry of urls.slice(0, job.count)) {
         const url = typeof entry === "string" ? entry : entry.url;
         controller.signal.throwIfAborted();
         let bytes;
@@ -473,9 +581,16 @@ export function createApp(options = {}) {
           if (response.status !== 200) throw new Error(`下载生成图片失败：HTTP ${response.status}`);
           bytes = response.bytes;
         }
+        const slot = state.images.find((i) => i.id === job.slotIds?.[job.imageIds.length]);
+        if (job.status === "cancelled") break;
         const image = await saveImage(bytes, {
+          id: slot?.id,
+          createdAt: slot?.createdAt || new Date().toISOString(),
+          favorite: slot?.favorite || false,
           kind: "generated",
           jobId: job.id,
+          parentId: job.sourceId,
+          threadId: slot?.threadId || state.images.find((i) => i.id === job.sourceId)?.threadId,
           prompt: job.prompt,
           providerName: job.providerName,
           model: job.model,
@@ -484,21 +599,28 @@ export function createApp(options = {}) {
         });
         job.imageIds.push(image.id);
       }
-      if (job.status !== "cancelled") job.status = "succeeded";
+      if (job.status !== "cancelled") {
+        if (job.imageIds.length < job.count)
+          throw new Error("提供商返回图片数量不足，未完成的图片可以重试");
+        job.status = "succeeded";
+      }
     } catch (error) {
       if (job.status !== "cancelled") {
         job.status = "failed";
         job.error = safeError(error, key);
+        updateSlots(job, "failed", job.error);
       }
     } finally {
       clearTimeout(timeout);
       job.completedAt = new Date().toISOString();
       running.delete(job.id);
       save();
-      pump();
+      if (closing && !running.size) store.close();
+      else pump();
     }
   }
   function pump() {
+    if (closing) return;
     while (running.size < 2) {
       const job = state.jobs.find((j) => j.status === "queued");
       if (!job) break;
@@ -522,7 +644,10 @@ export function createApp(options = {}) {
   return {
     app,
     close() {
+      if (closing) return;
+      closing = true;
       for (const controller of running.values()) controller.abort();
+      if (!running.size) store.close();
     },
   };
 }

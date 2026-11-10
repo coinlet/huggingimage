@@ -126,7 +126,7 @@ test(
       assert.equal("secret" in provider, false);
       assert.equal("apiKey" in provider, false);
       assert.equal(
-        readFileSync(path.join(dir, "workspace.json"), "utf8").includes(base.apiKey),
+        readFileSync(path.join(dir, "workspace.sqlite"), "utf8").includes(base.apiKey),
         false,
       );
       const update = await call(`/api/providers/${provider.id}`, "PUT", { ...base, apiKey: "" });
