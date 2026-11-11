@@ -422,19 +422,22 @@ export function ImageThread(props: Props) {
                 </button>
               </div>
             )}
-            <button
-              className="primary-button full-width"
-              disabled={
-                busy ||
-                !!active ||
-                !ready ||
-                !prompt.trim() ||
-                !provider?.enabled ||
-                !provider.supportsEdit
-              }
-            >
-              {busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />} 继续编辑
-            </button>
+            <div className="thread-submit-bar">
+              <button
+                className="primary-button full-width"
+                disabled={
+                  busy ||
+                  !!active ||
+                  !ready ||
+                  !prompt.trim() ||
+                  !provider?.enabled ||
+                  !provider.supportsEdit
+                }
+              >
+                {busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{" "}
+                继续编辑
+              </button>
+            </div>
             <button
               type="button"
               className="text-button"

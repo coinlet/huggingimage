@@ -1,0 +1,738 @@
+/* Keep content above the composer even when reference images or options expand it. */
+.main {
+  padding-bottom: calc(var(--composer-height, 260px) + 24px);
+}
+.mobile-size-toggle {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  button,
+  a,
+  select {
+    touch-action: manipulation;
+  }
+  .icon-button,
+  .favorite-button,
+  .remix-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .primary-button,
+  .secondary-button,
+  .danger-button,
+  .text-button,
+  .nav-item {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 700px) {
+  html {
+    scroll-padding-bottom: calc(var(--composer-height, 260px) + var(--keyboard-inset, 0px) + 16px);
+  }
+  body {
+    min-width: 320px;
+    overflow-x: clip;
+    font-size: 15px;
+  }
+  input,
+  textarea,
+  select,
+  .field input,
+  .field textarea,
+  .field select,
+  .advanced-fields .field input,
+  .resolution-control input,
+  .resolution-control select,
+  .thread-editor textarea,
+  .thread-editor select,
+  .select-wrap select {
+    font-size: 16px;
+  }
+  input,
+  select {
+    min-height: 44px;
+  }
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .main,
+  .main-content,
+  .gallery-tabs,
+  .gallery-tools,
+  .provider-form,
+  .provider-fields,
+  .field-pair,
+  .thread-info,
+  .thread-editor {
+    min-width: 0;
+    min-inline-size: 0;
+  }
+  .main {
+    min-height: 100dvh;
+    padding-bottom: calc(var(--composer-height, 280px) + var(--keyboard-inset, 0px) + 24px);
+  }
+  .main-content {
+    padding: 24px max(14px, env(safe-area-inset-right)) 16px max(14px, env(safe-area-inset-left));
+  }
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 32;
+    height: auto;
+    min-height: 64px;
+    padding: calc(8px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px
+      max(12px, env(safe-area-inset-left));
+    background: #141713f5;
+  }
+  .breadcrumb {
+    min-width: 0;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .breadcrumb > span:not(.breadcrumb-slash) {
+    display: none;
+  }
+  .topbar-right {
+    gap: 6px;
+  }
+  .topbar .icon-button,
+  .mobile-menu {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+  .hero {
+    padding-bottom: 24px;
+  }
+  .hero h1 {
+    font-size: clamp(26px, 7vw, 34px);
+  }
+  .hero > p {
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .hero-eyebrow {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+  .gallery-toolbar {
+    position: relative;
+    gap: 8px;
+  }
+  .gallery-tabs {
+    flex: 1;
+    max-width: 100%;
+  }
+  .gallery-tabs > button {
+    flex-shrink: 0;
+    min-height: 44px;
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  .collection-title {
+    font-size: 14px;
+  }
+  .search-input {
+    width: min(240px, calc(100vw - 90px));
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .image-grid {
+    gap: 10px;
+  }
+  .card-top {
+    inset: 6px 6px auto;
+  }
+  .image-label {
+    max-width: calc(100% - 48px);
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .favorite-button,
+  .remix-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .card-bottom {
+    inset: auto 8px 8px;
+  }
+  .card-bottom h3 {
+    font-size: 12px;
+  }
+  .card-bottom > div > span {
+    font-size: 10px;
+  }
+  .active-job {
+    padding: 14px;
+  }
+  .active-job strong,
+  .active-job p {
+    font-size: 13px;
+  }
+  .active-job span,
+  .job-info > span {
+    font-size: 11px;
+  }
+  .job-info > strong {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .job-error,
+  .recent-error {
+    font-size: 12px;
+  }
+  .recent-error {
+    flex-wrap: wrap;
+  }
+
+  .sidebar {
+    width: min(300px, calc(100vw - 44px));
+    height: var(--viewport-height, 100dvh);
+    top: var(--viewport-top, 0px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sidebar .nav-item,
+  .new-creation {
+    min-height: 48px;
+    font-size: 15px;
+  }
+  .sidebar .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .connection-card strong,
+  .connection-card button {
+    font-size: 13px;
+  }
+  .sidebar-bottom {
+    padding-bottom: 8px;
+  }
+
+  .composer-dock {
+    bottom: var(--keyboard-inset, 0px);
+    padding: 12px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
+  }
+  .composer {
+    max-height: calc(var(--viewport-height, 100dvh) * 0.72);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px;
+  }
+  .composer-mode {
+    gap: 4px;
+  }
+  .composer-mode > button {
+    min-height: 44px;
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  .prompt-row textarea {
+    width: 100%;
+    min-height: 64px;
+    max-height: 120px;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 8px 0;
+    padding: 4px;
+  }
+  .composer-bottom {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .composer-options {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    gap: 4px;
+  }
+  .composer-options .icon-button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px;
+  }
+  .composer-options .icon-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .select-wrap {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .select-wrap select {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 18px 8px 2px;
+  }
+  .generation-actions {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    gap: 10px;
+  }
+  .model-select {
+    flex: 1;
+    max-width: none;
+    min-width: 0;
+    font-size: 16px;
+  }
+  .model-select select {
+    width: 100%;
+    text-overflow: ellipsis;
+  }
+  .generate-button {
+    width: auto;
+    min-width: 84px;
+    min-height: 46px;
+    height: auto;
+    padding: 10px 14px;
+    gap: 6px;
+  }
+  .generate-button span {
+    display: inline;
+    font-size: 14px;
+  }
+  .composer-footnote {
+    display: none;
+  }
+  .composer-resolution {
+    display: none;
+  }
+  .composer-resolution.is-open {
+    display: block;
+  }
+  .mobile-size-toggle {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    border-top: 1px solid #35412c;
+    gap: 8px;
+    color: #bdd0ad;
+    font-size: 13px;
+    padding: 7px 4px;
+  }
+  .mobile-size-toggle > span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .mobile-size-toggle .expanded {
+    transform: rotate(180deg);
+  }
+  .resolution-control.compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .resolution-control label,
+  .resolution-control .section-label {
+    font-size: 13px;
+  }
+  .resolution-control .help-text,
+  .resolution-control.compact > p {
+    font-size: 12px;
+  }
+  .advanced-panel {
+    position: static;
+    width: 100%;
+    margin: 10px 0;
+    box-shadow: none;
+  }
+  .advanced-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .advanced-fields > label:last-child {
+    grid-column: 1 / -1;
+  }
+  .reference-row {
+    min-width: 0;
+  }
+  .reference-chip {
+    max-width: 100%;
+  }
+  .reference-chip > div {
+    min-width: 0;
+  }
+  .reference-chip strong {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reference-chip small,
+  .mask-button,
+  .mask-indicator {
+    font-size: 11px;
+  }
+  .reference-upload {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .reference-upload small {
+    display: none;
+  }
+  .mask-button {
+    min-height: 44px;
+  }
+  [data-keyboard-open="true"][data-composer-typing="true"] .composer .composer-resolution,
+  [data-keyboard-open="true"][data-composer-typing="true"] .composer .mobile-size-toggle,
+  [data-keyboard-open="true"][data-composer-typing="true"] .composer .advanced-panel {
+    display: none;
+  }
+  [data-keyboard-open="true"] .composer-dock {
+    padding-bottom: 6px;
+  }
+  [data-keyboard-open="true"] .composer {
+    max-height: calc(var(--viewport-height, 100dvh) - 12px);
+  }
+
+  .modal-backdrop {
+    inset: var(--viewport-top, 0px) 0 auto;
+    height: var(--viewport-height, 100dvh);
+    padding: 0;
+    overscroll-behavior: contain;
+  }
+  .modal:not(.login-modal) {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .modal-heading {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px
+      max(16px, env(safe-area-inset-left));
+    gap: 12px;
+    background: #181d17f5;
+    backdrop-filter: blur(12px);
+  }
+  .modal-heading > div {
+    min-width: 0;
+  }
+  .modal-heading h2 {
+    font-size: 20px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .modal-heading > button {
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .login-modal {
+    width: calc(100% - 24px);
+    max-height: calc(var(--viewport-height, 100dvh) - 24px);
+  }
+  .login-modal .modal-heading {
+    padding-top: 18px;
+  }
+  .login-modal form {
+    padding: 20px;
+  }
+  .login-modal .primary-button {
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .provider-sidebar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    align-items: stretch;
+    padding: 12px 16px;
+  }
+  .provider-sidebar .section-label,
+  .provider-sidebar .security-note {
+    display: none;
+  }
+  .provider-row {
+    flex: 0 0 auto;
+    min-width: 140px;
+    max-width: 210px;
+    min-height: 52px;
+    padding: 8px;
+  }
+  .provider-row strong {
+    font-size: 13px;
+    max-width: 145px;
+  }
+  .provider-row small {
+    font-size: 10px;
+    max-width: 145px;
+  }
+  .add-provider {
+    flex: 0 0 auto;
+    min-height: 52px;
+    font-size: 13px;
+  }
+  .provider-form {
+    padding: 20px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+  }
+  .provider-types {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .provider-types button {
+    min-height: 48px;
+    font-size: 13px;
+  }
+  .form-heading {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .form-heading h3 {
+    font-size: 18px;
+  }
+  .form-heading p,
+  .switch-label {
+    font-size: 12px;
+  }
+  .switch-label,
+  .checkbox-line,
+  .capability {
+    min-height: 44px;
+  }
+  .field {
+    font-size: 14px;
+  }
+  .field .optional {
+    position: static;
+    font-size: 11px;
+  }
+  .field small,
+  .help-text,
+  .variable-help,
+  .variable-help p,
+  .capability p,
+  .space-autofill p,
+  .space-discovery p,
+  .connection-result p {
+    font-size: 12px;
+  }
+  .field-pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    width: 100%;
+    padding: 11px;
+  }
+  .field .code-input {
+    min-height: 120px;
+    font-size: 16px;
+  }
+  .password-field .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+    top: 0;
+  }
+  .password-field input {
+    padding-right: 48px;
+  }
+  .space-autofill {
+    padding: 14px;
+  }
+  .space-autofill > button {
+    width: 100%;
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .space-capabilities {
+    overflow-wrap: anywhere;
+  }
+  .variable-help code,
+  .mcp-tool-schema pre,
+  .connection-result pre {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    max-width: 100%;
+    font-size: 12px;
+  }
+  .form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+    background: #181d17f5;
+    backdrop-filter: blur(12px);
+  }
+  .form-actions .action-spacer {
+    display: none;
+  }
+  .form-actions .primary-button,
+  .form-actions .secondary-button {
+    flex: 1;
+    min-width: 0;
+    min-height: 46px;
+    padding: 10px 8px;
+    font-size: 12px;
+    white-space: normal;
+  }
+  .form-actions .danger-button {
+    min-height: 46px;
+    font-size: 12px;
+    padding: 10px 8px;
+  }
+  .settings-footer {
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .thread-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .thread-slide {
+    height: min(42dvh, 360px);
+    min-height: 170px;
+  }
+  .thread-slide figcaption {
+    font-size: 12px;
+  }
+  .thread-gallery {
+    padding-bottom: 12px;
+  }
+  .thread-navigation {
+    padding: 4px 10px;
+    font-size: 12px;
+    gap: 8px;
+  }
+  .thread-navigation button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .thread-thumbnails {
+    padding: 0 16px;
+  }
+  .thread-thumbnails button {
+    width: 56px;
+    height: 56px;
+  }
+  .thread-info {
+    padding: 22px max(16px, env(safe-area-inset-right)) 22px max(16px, env(safe-area-inset-left));
+    gap: 16px;
+  }
+  .thread-info h3 {
+    font-size: 20px;
+  }
+  .thread-prompt p {
+    font-size: 15px;
+    max-height: none;
+  }
+  .detail-metadata {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .detail-metadata span {
+    min-width: 0;
+    font-size: 12px;
+  }
+  .detail-metadata strong {
+    overflow-wrap: anywhere;
+    font-size: 13px;
+  }
+  .detail-actions {
+    flex-wrap: wrap;
+  }
+  .detail-actions .secondary-button {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .thread-editor .section-label {
+    font-size: 13px;
+  }
+  .thread-editor textarea {
+    min-height: 110px;
+    scroll-margin-block: 110px 90px;
+  }
+  .thread-submit-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+    background: #181d17f5;
+  }
+  .thread-submit-bar .primary-button {
+    min-height: 48px;
+    font-size: 15px;
+  }
+  .thread-progress {
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .thread-error,
+  .inline-error,
+  .delete-confirm p {
+    font-size: 13px;
+  }
+  .delete-confirm button {
+    min-height: 44px;
+  }
+  .thread-info > .primary-button {
+    min-height: 46px;
+    font-size: 14px;
+  }
+  .help-content {
+    padding: 20px 16px;
+  }
+  .help-step p {
+    font-size: 13px;
+  }
+  .toast {
+    top: calc(var(--viewport-top, 0px) + env(safe-area-inset-top) + 74px);
+    bottom: auto;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    min-width: 0;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 700px) and (max-height: 500px) and (orientation: landscape) {
+  .hero {
+    padding-bottom: 16px;
+  }
+  .hero h1 {
+    margin-top: 4px;
+  }
+  .composer-mode {
+    display: none;
+  }
+  .prompt-row textarea {
+    min-height: 44px;
+    max-height: 70px;
+    margin: 2px 0;
+  }
+  .composer {
+    padding: 6px 10px;
+  }
+  .thread-slide {
+    height: 50dvh;
+    min-height: 120px;
+  }
+}

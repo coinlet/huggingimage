@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { usePageScrollLock } from "./usePageScrollLock";
 export function Modal({
   title,
   children,
@@ -13,14 +14,15 @@ export function Modal({
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  usePageScrollLock(true);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
     const before = document.activeElement as HTMLElement;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     ref.current?.focus();
     function onKey(event: KeyboardEvent) {
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (dialogs[dialogs.length - 1] !== ref.current) return;
       if (event.key === "Escape" && closeRef.current) {
         event.preventDefault();
         closeRef.current();
@@ -52,9 +54,12 @@ export function Modal({
     }
     document.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = overflow;
       document.removeEventListener("keydown", onKey);
-      before?.focus();
+      if (
+        before?.isConnected &&
+        !(window.matchMedia("(pointer: coarse)").matches && before.matches("input,textarea,select"))
+      )
+        before.focus({ preventScroll: true });
     };
   }, []);
   return createPortal(

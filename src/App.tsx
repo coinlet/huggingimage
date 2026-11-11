@@ -35,6 +35,8 @@ import { Modal } from "./Modal";
 import { ImageThread } from "./ImageThread";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 import { newImageId } from "./image-id";
+import { useWorkspaceViewport } from "./useWorkspaceViewport";
+import { usePageScrollLock } from "./usePageScrollLock";
 import { ResolutionControl } from "./ResolutionControl";
 import { resolveResolution, type SizeSettings } from "../shared/resolution.mjs";
 
@@ -101,6 +103,7 @@ export default function App() {
     width: 1024,
     height: 1024,
   });
+  const [mobileResolution, setMobileResolution] = useState(false);
   const [advanced, setAdvanced] = useState(false),
     [negativePrompt, setNegativePrompt] = useState(""),
     [seed, setSeed] = useState(""),
@@ -127,6 +130,27 @@ export default function App() {
   const textarea = useRef<HTMLTextAreaElement>(null),
     fileInput = useRef<HTMLInputElement>(null),
     maskInput = useRef<HTMLInputElement>(null);
+  const composerDock = useRef<HTMLDivElement>(null);
+  const navigation = useRef<HTMLElement>(null);
+  const mobile = useWorkspaceViewport(composerDock);
+  usePageScrollLock(mobile && sidebar);
+  useEffect(() => {
+    if (settings || help || detail) setSidebar(false);
+  }, [settings, help, detail]);
+  useEffect(() => {
+    if (!mobile || !sidebar) return;
+    const before = document.activeElement as HTMLElement | null;
+    navigation.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]')) setSidebar(false);
+    };
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      if (!document.querySelector('[role="dialog"]') && before?.isConnected)
+        before.focus({ preventScroll: true });
+    };
+  }, [mobile, sidebar]);
   const notify = useCallback((message: string) => setToast(message), []);
   const refreshProviders = useCallback(async () => {
     const data = await api<Provider[]>("/providers");
@@ -476,7 +500,14 @@ export default function App() {
   );
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${sidebar ? "open" : ""}`}>
+      <aside
+        id="workspace-navigation"
+        ref={navigation}
+        className={`sidebar ${sidebar ? "open" : ""}`}
+        inert={mobile && !sidebar ? true : undefined}
+        aria-hidden={mobile && !sidebar ? true : undefined}
+        aria-label="工作区导航"
+      >
         <div className="sidebar-top">
           <Logo />
           <button
@@ -570,12 +601,14 @@ export default function App() {
         </div>
       </aside>
       {sidebar && <div className="sidebar-scrim" onClick={() => setSidebar(false)} />}
-      <main className="main">
+      <main className="main" inert={mobile && sidebar ? true : undefined}>
         <header className="topbar">
           <div className="breadcrumb">
             <button
               className="icon-button mobile-menu"
               aria-label="打开导航"
+              aria-controls="workspace-navigation"
+              aria-expanded={sidebar}
               onClick={() => setSidebar(true)}
             >
               <Menu size={20} />
@@ -857,7 +890,7 @@ export default function App() {
             </>
           )}
         </div>
-        <div className="composer-dock">
+        <div className="composer-dock" ref={composerDock}>
           <form
             className={`composer ${mode === "edit" ? "editing" : ""}`}
             onSubmit={generate}
@@ -1040,13 +1073,35 @@ export default function App() {
                 {submitError}
               </div>
             )}
-            <ResolutionControl
-              compact
-              value={sizeSettings}
-              onChange={setSizeSettings}
-              ratio={ratio}
-              provider={provider}
-            />
+            <button
+              type="button"
+              className="mobile-size-toggle"
+              aria-expanded={mobileResolution}
+              aria-controls="composer-resolution"
+              onClick={() => setMobileResolution((open) => !open)}
+            >
+              <span>
+                <SlidersHorizontal size={16} /> 分辨率 ·{" "}
+                {sizeSettings.resolution === "custom"
+                  ? `${sizeSettings.width} × ${sizeSettings.height}`
+                  : sizeSettings.resolution === "default"
+                    ? "默认"
+                    : `${sizeSettings.resolution} px`}
+              </span>
+              <ChevronDown size={16} className={mobileResolution ? "expanded" : ""} />
+            </button>
+            <div
+              id="composer-resolution"
+              className={`composer-resolution ${mobileResolution ? "is-open" : ""}`}
+            >
+              <ResolutionControl
+                compact
+                value={sizeSettings}
+                onChange={setSizeSettings}
+                ratio={ratio}
+                provider={provider}
+              />
+            </div>
             <div className="composer-bottom">
               <div className="composer-options">
                 <button

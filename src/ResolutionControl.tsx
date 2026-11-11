@@ -48,6 +48,8 @@ export function ResolutionControl({
           <label>
             <span className="section-label">宽度（px）</span>
             <input
+              inputMode="numeric"
+              enterKeyHint="next"
               aria-label="图片宽度"
               type="number"
               min={64}
@@ -61,6 +63,8 @@ export function ResolutionControl({
           <label>
             <span className="section-label">高度（px）</span>
             <input
+              inputMode="numeric"
+              enterKeyHint="done"
               aria-label="图片高度"
               type="number"
               min={64}
