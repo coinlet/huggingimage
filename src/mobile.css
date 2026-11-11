@@ -736,3 +736,337 @@
     min-height: 120px;
   }
 }
+
+/* The image editor is a viewport, not a vertically scrolling document. */
+.creation-options {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.creation-options .field {
+  margin: 0;
+}
+.creation-options select,
+.creation-options input,
+.creation-options textarea {
+  width: 100%;
+}
+.creation-advanced-options {
+  min-width: 0;
+}
+.creation-advanced-options > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  color: #c4d7b4;
+  font-size: 13px;
+}
+.creation-advanced-options .field {
+  margin: 12px 0;
+}
+.creation-advanced-options > h3 {
+  font-size: 15px;
+  margin: 8px 0 12px;
+}
+.thread-mask-settings {
+  margin-top: 14px;
+}
+.thread-mask-settings > .secondary-button {
+  cursor: pointer;
+}
+.thread-mask-settings > label:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 700px) {
+  .modal.thread-modal {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+  .thread-modal > .modal-heading {
+    position: relative;
+    flex: 0 0 auto;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    padding-bottom: 8px;
+  }
+  .thread-modal > .modal-heading h2 {
+    font-size: 18px;
+  }
+  .thread-modal > .modal-heading .eyebrow {
+    display: none;
+  }
+  .thread-modal .thread-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+  }
+  .thread-modal .thread-gallery {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+    position: relative;
+  }
+  .thread-modal .thread-slides {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: hidden;
+  }
+  .thread-modal .thread-slide {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+  .thread-modal .thread-slide img {
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .thread-modal .thread-slide figcaption {
+    top: 8px;
+    left: 12px;
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+  .thread-modal .thread-navigation {
+    flex: 0 0 40px;
+    height: 40px;
+    min-height: 0;
+    padding: 0 10px;
+    gap: 12px;
+    background: #10160d;
+    font-size: 12px;
+  }
+  .thread-modal .thread-navigation button {
+    min-height: 36px;
+    height: 36px;
+  }
+  .thread-modal .thread-thumbnails {
+    display: none;
+  }
+  .thread-modal .image-placeholder {
+    min-height: 0;
+  }
+  .thread-modal .placeholder-content {
+    padding: 12px;
+    gap: 8px;
+  }
+  .thread-modal .placeholder-content > svg {
+    width: 28px;
+    height: 28px;
+  }
+  .thread-modal .placeholder-content strong {
+    font-size: 15px;
+  }
+  .thread-modal .placeholder-content p {
+    max-height: 56px;
+    font-size: 12px;
+  }
+  .thread-modal .thread-info {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 10px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+    gap: 6px;
+    border-top: 1px solid #2a3523;
+    background: #181d17;
+  }
+  .mobile-current-prompt {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 18px;
+    color: #b0c39e;
+  }
+  .mobile-current-prompt > span {
+    color: #7f9770;
+  }
+  .thread-modal .thread-editor {
+    display: grid;
+    gap: 6px;
+    margin-top: 0;
+    min-height: 0;
+  }
+  .thread-modal .thread-editor > .section-label {
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .thread-modal .thread-editor textarea {
+    min-height: 52px;
+    height: clamp(52px, calc(var(--viewport-height, 100dvh) * 0.12), 88px);
+    max-height: 88px;
+    resize: none;
+    padding: 9px 11px;
+    line-height: 1.5;
+    overflow-y: auto;
+    scroll-margin: 0;
+  }
+  .thread-modal .thread-submit-bar {
+    position: static;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    padding: 0;
+    background: none;
+  }
+  .thread-modal .thread-submit-bar > .primary-button {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .thread-options-button {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 8px 11px;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .thread-modal .thread-submit-bar > .secondary-button {
+    min-height: 44px;
+  }
+  .thread-modal .thread-editor-hint {
+    display: none;
+  }
+  .thread-modal .thread-error {
+    margin: 0;
+    line-height: 18px;
+    max-height: 36px;
+    overflow-y: auto;
+    font-size: 12px;
+  }
+  .thread-modal .thread-progress {
+    margin: 0;
+    line-height: 18px;
+    max-height: 24px;
+    overflow: hidden;
+    flex-wrap: nowrap;
+    font-size: 12px;
+  }
+  .thread-modal .thread-progress .text-button {
+    display: none;
+  }
+  [data-keyboard-open="true"] .thread-modal .mobile-current-prompt {
+    display: none;
+  }
+  [data-keyboard-open="true"] .thread-modal .thread-info {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  [data-keyboard-open="true"] .thread-modal .placeholder-content p {
+    display: none;
+  }
+
+  .thread-settings-backdrop {
+    align-items: flex-end;
+    background: #050804a8;
+  }
+  .modal.thread-settings-modal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: min(90%, 760px);
+    max-height: 90%;
+    padding-bottom: 0;
+    overflow: hidden;
+    border: 1px solid #3a4532;
+    border-bottom: 0;
+    border-radius: 20px 20px 0 0;
+  }
+  .thread-settings-modal > .modal-heading {
+    position: relative;
+    flex-shrink: 0;
+    padding-top: 12px;
+  }
+  .thread-settings-modal .eyebrow {
+    display: none;
+  }
+  .thread-settings-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px max(16px, env(safe-area-inset-right)) 20px max(16px, env(safe-area-inset-left));
+  }
+  .thread-settings-content .creation-options {
+    gap: 16px;
+  }
+  .thread-settings-content .thread-thumbnails {
+    display: flex;
+    padding: 12px 0;
+  }
+  .thread-settings-content .thread-thumbnails button {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+  }
+  .thread-settings-content .field select,
+  .thread-settings-content .field input,
+  .thread-settings-content .field textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .thread-settings-content .thread-mask-settings > label {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .thread-settings-content .thread-image-details,
+  .thread-settings-content .thread-version-settings {
+    border-top: 1px solid #33412c;
+    margin-top: 20px;
+    padding-top: 4px;
+  }
+  .thread-settings-content details > summary {
+    min-height: 44px;
+    padding: 12px 0;
+    cursor: pointer;
+    color: #c9dabc;
+    font-size: 14px;
+  }
+  .thread-settings-content .thread-prompt p {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .thread-settings-content .thread-prompt {
+    margin-top: 16px;
+  }
+  .thread-settings-content .detail-metadata {
+    margin: 18px 0;
+  }
+  .thread-settings-content .detail-actions {
+    margin-top: 14px;
+  }
+  .thread-settings-footer {
+    flex: 0 0 auto;
+    padding: 12px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+    border-top: 1px solid #33412c;
+    background: #181d17;
+  }
+  .thread-settings-footer > button {
+    min-height: 46px;
+    font-size: 15px;
+  }
+}

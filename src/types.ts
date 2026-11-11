@@ -147,3 +147,13 @@ export type McpDiscovery = {
   supportsGenerate: boolean;
   supportsEdit: boolean;
 };
+
+export type CreationSettings = {
+  ratio: string;
+  count: number;
+  negativePrompt: string;
+  seed: string;
+  steps: number;
+  guidance: number;
+  maskId?: string;
+};

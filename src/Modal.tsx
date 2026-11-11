@@ -7,11 +7,13 @@ export function Modal({
   children,
   onClose,
   className = "",
+  backdropClassName = "",
 }: {
   title: string;
   children: ReactNode;
   onClose?: () => void;
   className?: string;
+  backdropClassName?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   usePageScrollLock(true);
@@ -64,7 +66,7 @@ export function Modal({
   }, []);
   return createPortal(
     <div
-      className="modal-backdrop"
+      className={`modal-backdrop ${backdropClassName}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}

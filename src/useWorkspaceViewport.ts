@@ -1,14 +1,9 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, type RefObject } from "react";
+import { useMobileScreen } from "./useMobileScreen";
 
 // Fixed controls must follow Safari's visual viewport when its keyboard opens.
 export function useWorkspaceViewport(composer: RefObject<HTMLDivElement | null>) {
-  const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 700px)").matches);
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 700px)");
-    const changed = () => setMobile(query.matches);
-    query.addEventListener("change", changed);
-    return () => query.removeEventListener("change", changed);
-  }, []);
+  const mobile = useMobileScreen();
   useEffect(() => {
     const element = composer.current;
     if (!element) return;

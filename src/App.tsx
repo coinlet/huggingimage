@@ -28,7 +28,15 @@ import {
   PanelLeftClose,
   AlertCircle,
 } from "lucide-react";
-import { api, json, type Provider, type ImageItem, type Job, type CreationInput } from "./types";
+import {
+  api,
+  json,
+  type Provider,
+  type ImageItem,
+  type Job,
+  type CreationInput,
+  type CreationSettings,
+} from "./types";
 import { EXAMPLES } from "./examples";
 import { Settings } from "./Settings";
 import { Modal } from "./Modal";
@@ -361,7 +369,7 @@ export default function App() {
     await refreshWork();
     return job;
   }
-  async function editInThread(image: ImageItem, editPrompt: string) {
+  async function editInThread(image: ImageItem, editPrompt: string, settings: CreationSettings) {
     if (!provider?.enabled || !provider.supportsEdit) throw new Error("请选择支持图片编辑的模型");
     return submitCreation(
       {
@@ -369,13 +377,8 @@ export default function App() {
         prompt: editPrompt,
         mode: "edit",
         sourceId: image.id,
-        ratio,
+        ...settings,
         ...sizeSettings,
-        count,
-        negativePrompt,
-        seed,
-        steps: provider.defaults?.edit?.steps ?? steps,
-        guidance: provider.defaults?.edit?.guidance ?? guidance,
       },
       false,
       image,
@@ -1239,7 +1242,7 @@ export default function App() {
           providerId={providerId}
           sizeSettings={sizeSettings}
           onSizeSettings={setSizeSettings}
-          ratio={ratio}
+          initialSettings={{ ratio, count, negativePrompt, seed, steps, guidance }}
           followJob={threadJob}
           onProvider={setProviderId}
           onClose={() => {
