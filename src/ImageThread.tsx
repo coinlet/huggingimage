@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { ImagePlaceholder } from "./ImagePlaceholder";
+import { ResolutionControl } from "./ResolutionControl";
+import type { SizeSettings } from "../shared/resolution.mjs";
 import { api, type ImageItem, type Job, type Provider } from "./types";
 
 type Props = {
@@ -19,6 +21,9 @@ type Props = {
   jobs: Job[];
   providers: Provider[];
   providerId: string;
+  sizeSettings: SizeSettings;
+  ratio: string;
+  onSizeSettings: (value: SizeSettings) => void;
   followJob?: string;
   onProvider: (id: string) => void;
   onClose: () => void;
@@ -393,6 +398,12 @@ export function ImageThread(props: Props) {
                 配置支持图片编辑的提供商
               </button>
             )}
+            <ResolutionControl
+              value={props.sizeSettings}
+              onChange={props.onSizeSettings}
+              ratio={props.ratio}
+              provider={provider}
+            />
             {error && (
               <p className="thread-error" role="alert">
                 {error}

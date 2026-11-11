@@ -35,6 +35,8 @@ import { Modal } from "./Modal";
 import { ImageThread } from "./ImageThread";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 import { newImageId } from "./image-id";
+import { ResolutionControl } from "./ResolutionControl";
+import { resolveResolution, type SizeSettings } from "../shared/resolution.mjs";
 
 type View = "explore" | "library" | "favorites" | "history";
 const viewLabels = {
@@ -94,6 +96,11 @@ export default function App() {
     [mode, setMode] = useState<"generate" | "edit">("generate"),
     [ratio, setRatio] = useState("1:1"),
     [count, setCount] = useState(1);
+  const [sizeSettings, setSizeSettings] = useState<SizeSettings>({
+    resolution: "default",
+    width: 1024,
+    height: 1024,
+  });
   const [advanced, setAdvanced] = useState(false),
     [negativePrompt, setNegativePrompt] = useState(""),
     [seed, setSeed] = useState(""),
@@ -187,6 +194,14 @@ export default function App() {
     if (provider?.supportsGenerate === false && provider.supportsEdit) setMode("edit");
     else if (provider && !provider.supportsEdit) setMode("generate");
   }, [providerId, provider?.supportsGenerate, provider?.supportsEdit]);
+  useEffect(() => {
+    if (provider?.type === "xai")
+      setSizeSettings((current) =>
+        ["default", "1024", "2048"].includes(current.resolution)
+          ? current
+          : { ...current, resolution: "default" },
+      );
+  }, [provider?.type]);
   const defaults = provider?.defaults?.[mode];
   useEffect(() => {
     setSteps(defaults?.steps ?? 28);
@@ -241,6 +256,8 @@ export default function App() {
   async function submitCreation(input: CreationInput, openPage: boolean, reference?: ImageItem) {
     const selectedProvider = providers.find((p) => p.id === input.providerId);
     if (!selectedProvider) throw new Error("请先配置模型提供商");
+    const dimensions = resolveResolution(input, selectedProvider.type);
+    input = { ...input, ...dimensions };
     const ids = input.slotIds || Array.from({ length: input.count }, () => newImageId());
     const request = { ...input, slotIds: ids };
     const parent =
@@ -250,7 +267,6 @@ export default function App() {
     const threadId =
       images.find((i) => i.id === ids[0])?.threadId ||
       (input.mode === "edit" ? parent?.threadId || parent?.id || ids[0] : ids[0]);
-    const [rw, rh] = input.ratio.split(":").map(Number);
     const drafts: ImageItem[] = ids.map((id) => ({
       id,
       url: "",
@@ -264,8 +280,8 @@ export default function App() {
       mode: input.mode,
       threadId,
       parentId: input.mode === "edit" ? input.sourceId : undefined,
-      width: Math.round((1024 * (rw || 1)) / (rh || 1)),
-      height: 1024,
+      width: dimensions.width,
+      height: dimensions.height,
       favorite: false,
       createdAt: images.find((i) => i.id === id)?.createdAt || new Date().toISOString(),
     }));
@@ -330,6 +346,7 @@ export default function App() {
         mode: "edit",
         sourceId: image.id,
         ratio,
+        ...sizeSettings,
         count,
         negativePrompt,
         seed,
@@ -399,6 +416,7 @@ export default function App() {
           prompt: prompt.trim(),
           mode,
           ratio,
+          ...sizeSettings,
           count,
           sourceId: mode === "edit" ? source?.id : undefined,
           maskId: mode === "edit" ? mask?.id : undefined,
@@ -1022,6 +1040,13 @@ export default function App() {
                 {submitError}
               </div>
             )}
+            <ResolutionControl
+              compact
+              value={sizeSettings}
+              onChange={setSizeSettings}
+              ratio={ratio}
+              provider={provider}
+            />
             <div className="composer-bottom">
               <div className="composer-options">
                 <button
@@ -1157,6 +1182,9 @@ export default function App() {
           jobs={jobs}
           providers={providers}
           providerId={providerId}
+          sizeSettings={sizeSettings}
+          onSizeSettings={setSizeSettings}
+          ratio={ratio}
           followJob={threadJob}
           onProvider={setProviderId}
           onClose={() => {

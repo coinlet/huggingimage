@@ -144,6 +144,8 @@ export async function runCompatible(
     headers = key ? { Authorization: `Bearer ${key}` } : {};
   if (provider.type === "xai") {
     common.aspect_ratio = job.ratio;
+    if (["1024", "2048"].includes(job.resolution))
+      common.resolution = job.resolution === "2048" ? "2k" : "1k";
     if (editing)
       common.image = {
         url: `data:image/png;base64,${source.toString("base64")}`,

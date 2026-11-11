@@ -255,3 +255,53 @@ test("cancelled image slots can be retried without adding another image", async 
     await fx.close();
   }
 });
+
+test("custom resolution is validated, persisted in a reserved slot, and reused on retry", async () => {
+  const png = await makePng();
+  const calls = [];
+  const fx = await fixture(async (_provider, _key, job) => {
+    calls.push({
+      width: job.width,
+      height: job.height,
+      ratio: job.ratio,
+      resolution: job.resolution,
+    });
+    if (calls.length === 1) throw new Error("temporary failure");
+    return [png];
+  });
+  try {
+    const invalid = await fx.call("/api/jobs", "POST", {
+      providerId: fx.provider.id,
+      prompt: "bad size",
+      resolution: "custom",
+      width: 4097,
+      height: 1024,
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal((await fx.call("/api/images")).data.length, 0);
+    const submitted = await fx.call("/api/jobs", "POST", {
+      providerId: fx.provider.id,
+      prompt: "forest",
+      resolution: "custom",
+      width: 1280,
+      height: 720,
+    });
+    assert.equal(submitted.status, 202);
+    assert.equal(submitted.data.ratio, "16:9");
+    await fx.waitJob(submitted.data.id);
+    const slot = (await fx.call("/api/images")).data[0];
+    assert.equal(slot.width, 1280);
+    assert.equal(slot.height, 720);
+    fx.restart();
+    const retry = (await fx.call(`/api/images/${slot.id}/retry`, "POST")).data;
+    assert.equal(retry.resolution, "custom");
+    assert.equal((await fx.waitJob(retry.id)).status, "succeeded");
+    assert.deepEqual(
+      calls,
+      [0, 1].map(() => ({ width: 1280, height: 720, ratio: "16:9", resolution: "custom" })),
+    );
+    assert.equal((await fx.call("/api/images")).data[0].width, 32);
+  } finally {
+    await fx.close();
+  }
+});

@@ -1,4 +1,5 @@
 import express from "express";
+import { resolveResolution } from "../shared/resolution.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import { randomUUID, randomBytes, timingSafeEqual, createHmac } from "node:crypto";
@@ -341,15 +342,6 @@ export function createApp(options = {}) {
   });
   const running = new Map();
   let closing = false;
-  const RATIOS = {
-    "1:1": [1024, 1024],
-    "3:2": [1536, 1024],
-    "2:3": [1024, 1536],
-    "16:9": [1536, 864],
-    "9:16": [864, 1536],
-    "4:3": [1280, 960],
-    "3:4": [960, 1280],
-  };
   function integer(value, fallback, min, max) {
     const n = Number(value ?? fallback);
     if (!Number.isInteger(n) || n < min || n > max)
@@ -385,8 +377,7 @@ export function createApp(options = {}) {
         mask.height !== source.height)
     )
       return res.status(400).json({ error: "蒙版尺寸必须与原图一致" });
-    const ratio = Object.hasOwn(RATIOS, b.ratio) ? b.ratio : "1:1";
-    const [width, height] = RATIOS[ratio];
+    const { ratio, width, height, resolution } = resolveResolution(b, provider.type);
     const guidance = Number(b.guidance ?? 3.5);
     if (!Number.isFinite(guidance) || guidance < 0 || guidance > 30)
       throw new Error("引导系数必须为 0–30");
@@ -416,6 +407,7 @@ export function createApp(options = {}) {
       sourceId: mode === "edit" ? source?.id : undefined,
       maskId: mode === "edit" ? mask?.id : undefined,
       ratio,
+      resolution,
       width,
       height,
       count: requestedCount,

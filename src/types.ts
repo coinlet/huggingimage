@@ -59,6 +59,9 @@ export type Job = {
   imageIds: string[];
   count: number;
   ratio: string;
+  resolution?: string;
+  width?: number;
+  height?: number;
 };
 export async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -103,6 +106,9 @@ export type SpaceDiscovery = {
 };
 
 export type CreationInput = {
+  resolution?: string;
+  width?: number;
+  height?: number;
   providerId: string;
   prompt: string;
   mode: "generate" | "edit";
