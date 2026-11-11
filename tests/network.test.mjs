@@ -133,3 +133,33 @@ test("resource downloads use default networking for both local and proxy-mapped 
   }
   assert.equal(visited.length, 4);
 });
+
+test("redirects preserve credentials on the same origin and strip MCP API keys on a different origin", async (t) => {
+  const visited = [];
+  t.mock.method(https, "request", (target, options, onResponse) => {
+    visited.push({ url: target.href, headers: options.headers });
+    const request = new EventEmitter();
+    request.setTimeout = () => {};
+    request.end = () =>
+      queueMicrotask(() => {
+        const response = new EventEmitter();
+        const redirect = visited.length < 3;
+        response.statusCode = redirect ? 302 : 200;
+        response.headers = redirect
+          ? { location: visited.length === 1 ? "/second.png" : "https://cdn.example.net/final.png" }
+          : {};
+        onResponse(response);
+        if (!redirect) response.emit("data", Buffer.from("image"));
+        response.emit("end");
+      });
+    return request;
+  });
+  await requestBytes("https://mcp.example.com/file.png", {
+    headers: { Authorization: "Bearer private", "X-API-Key": "private", "api-key": "private" },
+  });
+  assert.equal(visited[1].headers["x-api-key"], "private");
+  assert.equal(visited[1].headers.authorization, "Bearer private");
+  assert.equal(visited[2].headers["x-api-key"], undefined);
+  assert.equal(visited[2].headers["api-key"], undefined);
+  assert.equal(visited[2].headers.authorization, undefined);
+});

@@ -76,6 +76,9 @@ export function ResolutionControl({
         {description}
         {!xai && "；需模型支持该尺寸"}
       </p>
+      {provider?.type === "mcp" && (
+        <p className="help-text">MCP 工具通过参数模板接收宽高；实际尺寸由第三方工具决定。</p>
+      )}
       {provider?.type === "gradio" && (
         <p className="help-text">
           Space 模板通过 {"{{width}}"} / {"{{height}}"}{" "}

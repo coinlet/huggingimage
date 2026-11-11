@@ -317,3 +317,42 @@ npm run test:network
 - xAI：提供默认、1K、2K 档位，使用官方 `resolution` 参数，实际像素尺寸由模型结合比例确定，不发送任意宽高。
 
 参考：[xAI 图片生成分辨率参数](https://docs.x.ai/developers/model-capabilities/images/generation)。
+
+
+### 第三方 MCP 图片提供商
+
+本应用可以作为 MCP 客户端，调用第三方 MCP 服务的生图和编辑工具。它与 xAI、OpenAI 兼容服务、HF Spaces 一样出现在工作台的提供商列表中，继续使用现有 SQLite 记录、分辨率、任务队列、原位重试与连续编辑。
+
+1. 在“提供商设置”中添加连接，选择 **MCP 服务**。
+2. 填写完整 MCP 端点，例如 `https://example.com/mcp` 或 `https://example.com/sse`，选择自动识别、Streamable HTTP 或 SSE。
+3. 如服务要求鉴权，在密钥栏填写 Token，选择 Bearer 或 X-API-Key；密钥加密保存在服务器，不填写到参数模板中。
+4. 点击“读取工具并填写”。此操作执行 MCP 初始化与 `tools/list`，不会调用图片生成。可识别的图片工具、宽高、提示词和推理默认值会自动填入。
+5. 分别启用并选择生成、编辑工具。检查参数模板，补齐标出的未知必填参数；可查看工具原始 JSON Schema。
+6. 保存连接，然后在创作框选择该提供商。
+
+例如，生成工具的参数模板可以是：
+
+```json
+{
+  "prompt": "{{prompt}}",
+  "width": "{{width}}",
+  "height": "{{height}}"
+}
+```
+
+编辑工具可以使用：
+
+```json
+{
+  "prompt": "{{prompt}}",
+  "image_base64": "{{image_base64}}"
+}
+```
+
+模板变量保留数字类型；`{{image}}` / `{{image_data_uri}}` 是 PNG data URI，`{{image_base64}}` 是纯 Base64，`{{images_b64_json}}` 是 data URI 数组的 JSON 字符串。蒙版使用 `{{mask}}` 或 `{{mask_base64}}`；尺寸可用 `{{width}}`、`{{height}}`、`{{size}}`（例如 `1280x720`）及 `{{aspect_ratio}}`。另可使用提示词、负向提示词、seed、steps、guidance、model 和 count。编辑工具需要能接收图片内容；仅接受自身文件 ID、公开 HTTP 图片 URL 或服务端路径的工具，需第三方提供支持 data URI / Base64 的图片输入接口。
+
+默认自动读取 MCP 的 Image 内容、结构化图片 URL、JSON 文本、Markdown 图片、内嵌图片资源及 MCP 图片资源链接。输出路径从整个工具结果开始，例如 `structuredContent.images.0` 或 `content.0`；留空自动读取。受保护的同源图片下载继续使用该服务的凭证，跨域不会转发凭证。第三方服务器返回的磁盘路径不会被当成本服务的文件读取。
+
+每次工具调用取一张图片，生成多张时逐次调用并递增 seed。工具必须在调用完成后返回可读取图片；仅返回异步任务 ID 的服务暂不自动猜测其查询/轮询工具。支持远程 Streamable HTTP 和旧版 SSE，不启动第三方 stdio 命令，不自动完成交互式 OAuth 登录。取消会尝试中止请求，但第三方已开始的推理和计费是否停止由其实现决定。
+
+客户端基于 [官方 MCP TypeScript SDK](https://ts.sdk.modelcontextprotocol.io/client)；这里新增的是第三方 MCP 提供商接入，不是对外发布本应用的 MCP 服务端。

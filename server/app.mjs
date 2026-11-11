@@ -9,12 +9,15 @@ import { validateUrl, requestBytes, requestJson } from "./network.mjs";
 import { validateSpace, inspectSpace, runCompatible, runSpace } from "./providers.mjs";
 import { discoverConfiguration } from "./space-discovery.mjs";
 import { repairEncodedEditProvider } from "./gradio-images.mjs";
+import { runMcp, inspectMcp, mcpAuthHeaders } from "./mcp-provider.mjs";
 
 export function createApp(options = {}) {
   const adminToken = options.adminToken ?? process.env.ADMIN_TOKEN ?? "";
   const providerRequest = options.requestJson || requestJson;
   const compatibleRunner = options.runCompatible || runCompatible;
   const spaceRunner = options.runSpace || runSpace;
+  const mcpRunner = options.runMcp || runMcp;
+  const mcpInspector = options.inspectMcp || inspectMcp;
   const spaceInspector = options.inspectSpace || inspectSpace;
   const store = createStore(path.resolve(options.dataDir || process.env.DATA_DIR || "./data"));
   const { state, save } = store;
@@ -111,7 +114,8 @@ export function createApp(options = {}) {
   }
   function validateProvider(body, previous) {
     const type = body.type;
-    if (!["xai", "openai", "gradio"].includes(type)) throw new Error("请选择有效的提供商类型");
+    if (!["xai", "openai", "gradio", "mcp"].includes(type))
+      throw new Error("请选择有效的提供商类型");
     const provider = {
       id: previous?.id || randomUUID(),
       type,
@@ -126,7 +130,44 @@ export function createApp(options = {}) {
     if (typeof body.apiKey === "string" && body.apiKey.trim())
       provider.secret = store.seal(body.apiKey.trim());
     if (body.clearKey === true) provider.secret = "";
-    if (type === "gradio") {
+    if (type === "mcp") {
+      provider.baseUrl = validateUrl(string(body.baseUrl)).href;
+      provider.mcpTransport = body.mcpTransport || "auto";
+      provider.mcpAuth = body.mcpAuth || "bearer";
+      provider.defaults = {};
+      for (const mode of ["generate", "edit"]) {
+        provider.defaults[mode] = {};
+        const value = body.defaults?.[mode];
+        if (Number.isFinite(value?.steps) && value.steps >= 1 && value.steps <= 100)
+          provider.defaults[mode].steps = value.steps;
+        if (Number.isFinite(value?.guidance) && value.guidance >= 0 && value.guidance <= 30)
+          provider.defaults[mode].guidance = value.guidance;
+      }
+      if (!["auto", "streamable-http", "sse"].includes(provider.mcpTransport))
+        throw new Error("请选择有效的 MCP 传输方式");
+      if (!["bearer", "x-api-key"].includes(provider.mcpAuth))
+        throw new Error("请选择有效的 MCP 鉴权方式");
+      provider.endpoint = string(body.endpoint, 200);
+      provider.editEndpoint = string(body.editEndpoint, 200);
+      provider.template = body.template;
+      provider.editTemplate = body.editTemplate;
+      provider.outputPath = string(body.outputPath, 200);
+      provider.editOutputPath =
+        typeof body.editOutputPath === "string"
+          ? string(body.editOutputPath, 200)
+          : provider.outputPath;
+      if (!provider.supportsGenerate && !provider.supportsEdit)
+        throw new Error("至少启用一种 MCP 图片能力");
+      for (const [enabled, tool, template] of [
+        [provider.supportsGenerate, provider.endpoint, provider.template],
+        [provider.supportsEdit, provider.editEndpoint, provider.editTemplate],
+      ])
+        if (
+          enabled &&
+          (!tool || !template || typeof template !== "object" || Array.isArray(template))
+        )
+          throw new Error("请填写 MCP 工具名称与 JSON 对象参数模板");
+    } else if (type === "gradio") {
       provider.space = validateSpace(string(body.space));
       provider.endpoint = string(body.endpoint, 200);
       provider.editEndpoint = string(body.editEndpoint, 200);
@@ -228,12 +269,53 @@ export function createApp(options = {}) {
       discoveryRunning--;
     }
   });
+  app.post("/api/mcp/discover", async (req, res) => {
+    if (discoveryRunning >= 2)
+      return res.status(429).json({ error: "最多同时读取两个服务，请稍后重试" });
+    const baseUrl = validateUrl(string(req.body.baseUrl)).href;
+    const mcpTransport = req.body.mcpTransport || "auto",
+      mcpAuth = req.body.mcpAuth || "bearer";
+    if (
+      !["auto", "streamable-http", "sse"].includes(mcpTransport) ||
+      !["bearer", "x-api-key"].includes(mcpAuth)
+    )
+      return res.status(400).json({ error: "MCP 连接参数无效" });
+    let key = string(req.body.apiKey, 10000);
+    if (req.body.providerId && !key && !req.body.clearKey) {
+      const previous = state.providers.find(
+        (p) => p.id === req.body.providerId && p.type === "mcp",
+      );
+      if (!previous) return res.status(404).json({ error: "原 MCP 连接不存在" });
+      if (previous.baseUrl !== baseUrl)
+        return res
+          .status(400)
+          .json({ error: "MCP 地址已改变，请重新填写 Token；不会将旧 Token 发送给新地址" });
+      key = store.open(previous.secret);
+    }
+    if (req.body.clearKey) key = "";
+    discoveryRunning++;
+    try {
+      const result = await mcpInspector({ type: "mcp", baseUrl, mcpTransport, mcpAuth }, key);
+      res.json(key ? JSON.parse(JSON.stringify(result).split(key).join("[已隐藏]")) : result);
+    } catch (error) {
+      res.status(400).json({ error: safeError(error, key) });
+    } finally {
+      discoveryRunning--;
+    }
+  });
   app.post("/api/providers/:id/test", async (req, res) => {
     const p = state.providers.find((p) => p.id === req.params.id);
     if (!p) return res.status(404).json({ error: "提供商不存在" });
     const key = store.open(p.secret);
     try {
-      if (p.type === "gradio") {
+      if (p.type === "mcp") {
+        const result = await mcpInspector(p, key);
+        res.json({
+          ok: true,
+          message: `MCP 连接成功，读取到 ${result.tools.length} 个工具`,
+          tools: result.tools.map((t) => (key ? t.name.split(key).join("[已隐藏]") : t.name)),
+        });
+      } else if (p.type === "gradio") {
         res.json({ ok: true, api: await spaceInspector(p, key) });
       } else {
         const data = await providerRequest(`${p.baseUrl}/models`, {
@@ -400,7 +482,7 @@ export function createApp(options = {}) {
       id: randomUUID(),
       providerId: provider.id,
       providerName: provider.name,
-      model: provider.model || provider.space,
+      model: provider.model || provider.space || provider.endpoint || provider.editEndpoint,
       prompt,
       negativePrompt: string(b.negativePrompt, 3000),
       mode,
@@ -473,7 +555,7 @@ export function createApp(options = {}) {
       id: randomUUID(),
       retryOf: previous.id,
       providerName: provider.name,
-      model: provider.model || provider.space,
+      model: provider.model || provider.space || provider.endpoint || provider.editEndpoint,
       status: "queued",
       count: 1,
       slotIds: [image.id],
@@ -537,9 +619,11 @@ export function createApp(options = {}) {
         ),
       );
       const work =
-        provider.type === "gradio"
-          ? spaceRunner(provider, key, job, source, mask, controller.signal)
-          : compatibleRunner(provider, key, job, source, mask, controller.signal);
+        provider.type === "mcp"
+          ? mcpRunner(provider, key, job, source, mask, controller.signal)
+          : provider.type === "gradio"
+            ? spaceRunner(provider, key, job, source, mask, controller.signal)
+            : compatibleRunner(provider, key, job, source, mask, controller.signal);
       const urls = await Promise.race([work, abortPromise]);
       if (!Array.isArray(urls) || !urls.length) throw new Error("提供商未返回图片，请重试");
       for (const entry of urls.slice(0, job.count)) {
@@ -561,6 +645,14 @@ export function createApp(options = {}) {
             target.hostname.endsWith(".hf.space")
           )
             headers.Authorization = `Bearer ${key}`;
+          if (
+            provider.type === "mcp" &&
+            key &&
+            typeof entry === "object" &&
+            target.origin === entry.authOrigin &&
+            target.origin === new URL(provider.baseUrl).origin
+          )
+            Object.assign(headers, mcpAuthHeaders(provider, key));
           let response;
           try {
             response = await requestBytes(url, {
@@ -587,7 +679,9 @@ export function createApp(options = {}) {
           providerName: job.providerName,
           model: job.model,
           mode: job.mode,
-          seed: provider.type === "gradio" ? job.seed + job.imageIds.length : undefined,
+          seed: ["gradio", "mcp"].includes(provider.type)
+            ? job.seed + job.imageIds.length
+            : undefined,
         });
         job.imageIds.push(image.id);
       }

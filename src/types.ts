@@ -1,7 +1,9 @@
 export type Provider = {
   id: string;
   name: string;
-  type: "xai" | "openai" | "gradio";
+  type: "xai" | "openai" | "gradio" | "mcp";
+  mcpTransport?: "auto" | "streamable-http" | "sse";
+  mcpAuth?: "bearer" | "x-api-key";
   enabled: boolean;
   supportsEdit: boolean;
   supportsGenerate?: boolean;
@@ -121,4 +123,27 @@ export type CreationInput = {
   steps: number;
   guidance: number;
   slotIds?: string[];
+};
+
+export type McpTool = {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+  template: Record<string, unknown>;
+  generateTemplate: Record<string, unknown>;
+  defaults: { steps?: number; guidance?: number };
+  missing: string[];
+  canGenerate: boolean;
+  canEdit: boolean;
+};
+export type McpDiscovery = {
+  defaults?: Provider["defaults"];
+  transport: string;
+  tools: McpTool[];
+  endpoint: string;
+  editEndpoint: string;
+  template: unknown;
+  editTemplate: unknown;
+  supportsGenerate: boolean;
+  supportsEdit: boolean;
 };

@@ -71,8 +71,9 @@ export async function requestBytes(value, options = {}, redirects = 0) {
     const target = new URL(response.headers.location, url);
     const nextHeaders = { ...headers };
     if (target.origin !== url.origin) {
-      delete nextHeaders.Authorization;
-      delete nextHeaders.authorization;
+      for (const name of Object.keys(nextHeaders))
+        if (["authorization", "x-api-key", "api-key"].includes(name.toLowerCase()))
+          delete nextHeaders[name];
     }
     return requestBytes(target.href, { ...options, headers: nextHeaders }, redirects + 1);
   }

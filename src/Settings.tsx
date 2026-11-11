@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Modal } from "./Modal";
+import { McpConfiguration } from "./McpConfiguration";
 import { api, json, type Provider, type SpaceDiscovery } from "./types";
 
 type Draft = Omit<Provider, "id" | "hasKey" | "template" | "editTemplate" | "extra"> & {
@@ -49,20 +50,33 @@ function blank(type: Provider["type"] = "xai"): Draft {
         ? "xAI · Grok Imagine"
         : type === "gradio"
           ? "Hugging Face Space"
-          : "OpenAI 兼容服务",
+          : type === "mcp"
+            ? "第三方 MCP 图片服务"
+            : "OpenAI 兼容服务",
     enabled: true,
-    supportsEdit: type !== "gradio",
-    supportsGenerate: type !== "gradio",
+    supportsEdit: !["gradio", "mcp"].includes(type),
+    supportsGenerate: !["gradio", "mcp"].includes(type),
     model: type === "xai" ? "grok-imagine-image-2.0" : type === "openai" ? "gpt-image-1" : "",
-    baseUrl: type === "xai" ? "https://api.x.ai/v1" : "https://api.openai.com/v1",
+    baseUrl:
+      type === "mcp" ? "" : type === "xai" ? "https://api.x.ai/v1" : "https://api.openai.com/v1",
+    mcpTransport: "auto",
+    mcpAuth: "bearer",
     space: "",
     endpoint: "",
     editEndpoint: "",
-    editOutputPath: "0",
-    outputPath: "0",
+    editOutputPath: type === "mcp" ? "" : "0",
+    outputPath: type === "mcp" ? "" : "0",
     apiKey: "",
-    templateText: JSON.stringify(defaultTemplate, null, 2),
-    editTemplateText: JSON.stringify(defaultEdit, null, 2),
+    templateText: JSON.stringify(
+      type === "mcp" ? { prompt: "{{prompt}}" } : defaultTemplate,
+      null,
+      2,
+    ),
+    editTemplateText: JSON.stringify(
+      type === "mcp" ? { prompt: "{{prompt}}", image: "{{image}}" } : defaultEdit,
+      null,
+      2,
+    ),
     extraText: "{}",
   };
 }
@@ -242,12 +256,18 @@ export function Settings({
               disabled={busy}
             >
               <span className={`provider-symbol ${p.type}`}>
-                {p.type === "gradio" ? "🤗" : p.type === "xai" ? "𝕏" : "◈"}
+                {p.type === "gradio" ? "🤗" : p.type === "xai" ? "𝕏" : p.type === "mcp" ? "M" : "◈"}
               </span>
               <span>
                 <strong>{p.name}</strong>
                 <small>
-                  {p.enabled ? (p.type === "gradio" ? "Hugging Face Space" : p.model) : "已停用"}
+                  {p.enabled
+                    ? p.type === "gradio"
+                      ? "Hugging Face Space"
+                      : p.type === "mcp"
+                        ? "MCP 图片工具"
+                        : p.model
+                    : "已停用"}
                 </small>
               </span>
               <ChevronRight size={14} />
@@ -284,6 +304,7 @@ export function Settings({
                   ["xai", "𝕏", "xAI"],
                   ["openai", "◈", "OpenAI 兼容"],
                   ["gradio", "🤗", "HF Spaces"],
+                  ["mcp", "M", "MCP 服务"],
                 ] as const
               ).map(([type, icon, label]) => (
                 <button
@@ -310,7 +331,44 @@ export function Settings({
                 maxLength={80}
               />
             </label>
-            {form.type === "gradio" ? (
+            {form.type === "mcp" ? (
+              <>
+                <label className="field">
+                  MCP 服务地址
+                  <input
+                    value={form.baseUrl}
+                    onChange={(e) => set("baseUrl", e.target.value)}
+                    placeholder="https://example.com/mcp"
+                  />
+                  <small>填写完整的远程 MCP 端点，例如 /mcp 或 /sse。</small>
+                </label>
+                <div className="field-pair">
+                  <label className="field">
+                    传输方式
+                    <select
+                      value={form.mcpTransport || "auto"}
+                      onChange={(e) =>
+                        set("mcpTransport", e.target.value as Provider["mcpTransport"])
+                      }
+                    >
+                      <option value="auto">自动识别 HTTP / SSE</option>
+                      <option value="streamable-http">Streamable HTTP</option>
+                      <option value="sse">SSE</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    鉴权方式
+                    <select
+                      value={form.mcpAuth || "bearer"}
+                      onChange={(e) => set("mcpAuth", e.target.value as Provider["mcpAuth"])}
+                    >
+                      <option value="bearer">Authorization: Bearer</option>
+                      <option value="x-api-key">X-API-Key</option>
+                    </select>
+                  </label>
+                </div>
+              </>
+            ) : form.type === "gradio" ? (
               <>
                 <label className="field">
                   Space 地址
@@ -346,7 +404,11 @@ export function Settings({
               </div>
             )}
             <label className="field">
-              {form.type === "gradio" ? "Hugging Face Token" : "API Key"}{" "}
+              {form.type === "gradio"
+                ? "Hugging Face Token"
+                : form.type === "mcp"
+                  ? "MCP Token / API Key"
+                  : "API Key"}{" "}
               <span className="optional">
                 {form.hasKey ? "已配置 · 留空保留" : "可选（取决于服务）"}
               </span>
@@ -379,6 +441,19 @@ export function Settings({
                 />
                 清除已保存的密钥
               </label>
+            )}
+            {form.type === "mcp" && (
+              <McpConfiguration
+                key={form.id || "new-mcp"}
+                value={form}
+                onChange={(patch) => {
+                  setForm((current) => ({ ...current, ...patch }));
+                  setError("");
+                  setResult(null);
+                }}
+                onBusy={setBusy}
+                onError={setError}
+              />
             )}
             {form.type === "gradio" && (
               <div className="space-autofill">
@@ -445,151 +520,153 @@ export function Settings({
                 )}
               </div>
             )}
-            <details
-              className="space-advanced"
-              open={form.type !== "gradio" || advancedOpen}
-              onToggle={(e) => {
-                if (form.type === "gradio") setAdvancedOpen(e.currentTarget.open);
-              }}
-            >
-              <summary hidden={form.type !== "gradio"}>
-                高级配置 · {manual ? "手动模式" : "查看和调整自动生成的配置"}
-              </summary>
-              {form.type === "gradio" && (
-                <>
-                  <label className="capability">
-                    <div>
-                      <strong>启用图片生成</strong>
-                      <p>编辑专用 Space 可以关闭此项</p>
+            {form.type !== "mcp" && (
+              <details
+                className="space-advanced"
+                open={form.type !== "gradio" || advancedOpen}
+                onToggle={(e) => {
+                  if (form.type === "gradio") setAdvancedOpen(e.currentTarget.open);
+                }}
+              >
+                <summary hidden={form.type !== "gradio"}>
+                  高级配置 · {manual ? "手动模式" : "查看和调整自动生成的配置"}
+                </summary>
+                {form.type === "gradio" && (
+                  <>
+                    <label className="capability">
+                      <div>
+                        <strong>启用图片生成</strong>
+                        <p>编辑专用 Space 可以关闭此项</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={form.supportsGenerate !== false}
+                        onChange={(e) => set("supportsGenerate", e.target.checked)}
+                      />
+                    </label>
+                  </>
+                )}
+                <label className="capability">
+                  <div>
+                    <strong>启用图片编辑</strong>
+                    <p>允许上传参考图片并通过提示词进行修改</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={form.supportsEdit}
+                    onChange={(e) => set("supportsEdit", e.target.checked)}
+                  />
+                </label>
+                {form.type === "gradio" ? (
+                  <>
+                    <div className="form-divider" />
+                    <div className="form-subheading">
+                      <h4>端点与参数映射</h4>
+                      <a
+                        href="https://www.gradio.app/guides/getting-started-with-the-js-client"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Gradio 文档 <ArrowUpRight size={13} />
+                      </a>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={form.supportsGenerate !== false}
-                      onChange={(e) => set("supportsGenerate", e.target.checked)}
-                    />
-                  </label>
-                </>
-              )}
-              <label className="capability">
-                <div>
-                  <strong>启用图片编辑</strong>
-                  <p>允许上传参考图片并通过提示词进行修改</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={form.supportsEdit}
-                  onChange={(e) => set("supportsEdit", e.target.checked)}
-                />
-              </label>
-              {form.type === "gradio" ? (
-                <>
-                  <div className="form-divider" />
-                  <div className="form-subheading">
-                    <h4>端点与参数映射</h4>
-                    <a
-                      href="https://www.gradio.app/guides/getting-started-with-the-js-client"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Gradio 文档 <ArrowUpRight size={13} />
-                    </a>
-                  </div>
-                  <p className="help-text">
-                    配置可由上方按钮自动生成。需要自定义参数时，可在这里调整；编辑与生成可使用不同的输出路径。
-                  </p>
-                  <div className="field-pair">
-                    <label className="field">
-                      生成端点
-                      <input
-                        value={form.endpoint}
-                        onChange={(e) => set("endpoint", e.target.value)}
-                        placeholder="/infer"
-                      />
-                    </label>
-                    <label className="field">
-                      输出路径
-                      <input
-                        value={form.outputPath}
-                        onChange={(e) => set("outputPath", e.target.value)}
-                        placeholder="0"
-                      />
-                      <small>例如 0 或 0.0.image；留空读取全部输出。</small>
-                    </label>
-                  </div>
-                  <label className="field">
-                    生成参数模板 <span className="optional">JSON 对象或位置参数数组</span>
-                    <textarea
-                      className="code-input"
-                      spellCheck={false}
-                      rows={8}
-                      value={form.templateText}
-                      onChange={(e) => set("templateText", e.target.value)}
-                    />
-                  </label>
-                  {form.supportsEdit && (
-                    <>
+                    <p className="help-text">
+                      配置可由上方按钮自动生成。需要自定义参数时，可在这里调整；编辑与生成可使用不同的输出路径。
+                    </p>
+                    <div className="field-pair">
                       <label className="field">
-                        编辑端点
+                        生成端点
                         <input
-                          value={form.editEndpoint}
-                          onChange={(e) => set("editEndpoint", e.target.value)}
-                          placeholder="/edit"
+                          value={form.endpoint}
+                          onChange={(e) => set("endpoint", e.target.value)}
+                          placeholder="/infer"
                         />
                       </label>
                       <label className="field">
-                        编辑输出路径
+                        输出路径
                         <input
-                          value={form.editOutputPath ?? form.outputPath}
-                          onChange={(e) => set("editOutputPath", e.target.value)}
+                          value={form.outputPath}
+                          onChange={(e) => set("outputPath", e.target.value)}
                           placeholder="0"
                         />
+                        <small>例如 0 或 0.0.image；留空读取全部输出。</small>
                       </label>
-                      <label className="field">
-                        编辑参数模板
-                        <textarea
-                          className="code-input"
-                          rows={6}
-                          spellCheck={false}
-                          value={form.editTemplateText}
-                          onChange={(e) => set("editTemplateText", e.target.value)}
-                        />
-                      </label>
-                    </>
-                  )}
-                  <div className="variable-help">
-                    可用变量：
-                    <code>
-                      {
-                        "{{prompt}} {{negative_prompt}} {{image}} {{images_b64_json}} {{image_base64}} {{image_data_uri}} {{mask}} {{width}} {{height}} {{seed}} {{steps}} {{guidance}}"
-                      }
-                    </code>
-                    <p>
-                      image / mask 变量转为 Gradio 文件；images_b64_json 用于接收 Base64 图片列表
-                      JSON 字符串的自定义 Space。ImageEditor 可使用 background / layers / composite
-                      嵌套对象。
+                    </div>
+                    <label className="field">
+                      生成参数模板 <span className="optional">JSON 对象或位置参数数组</span>
+                      <textarea
+                        className="code-input"
+                        spellCheck={false}
+                        rows={8}
+                        value={form.templateText}
+                        onChange={(e) => set("templateText", e.target.value)}
+                      />
+                    </label>
+                    {form.supportsEdit && (
+                      <>
+                        <label className="field">
+                          编辑端点
+                          <input
+                            value={form.editEndpoint}
+                            onChange={(e) => set("editEndpoint", e.target.value)}
+                            placeholder="/edit"
+                          />
+                        </label>
+                        <label className="field">
+                          编辑输出路径
+                          <input
+                            value={form.editOutputPath ?? form.outputPath}
+                            onChange={(e) => set("editOutputPath", e.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label className="field">
+                          编辑参数模板
+                          <textarea
+                            className="code-input"
+                            rows={6}
+                            spellCheck={false}
+                            value={form.editTemplateText}
+                            onChange={(e) => set("editTemplateText", e.target.value)}
+                          />
+                        </label>
+                      </>
+                    )}
+                    <div className="variable-help">
+                      可用变量：
+                      <code>
+                        {
+                          "{{prompt}} {{negative_prompt}} {{image}} {{images_b64_json}} {{image_base64}} {{image_data_uri}} {{mask}} {{width}} {{height}} {{seed}} {{steps}} {{guidance}}"
+                        }
+                      </code>
+                      <p>
+                        image / mask 变量转为 Gradio 文件；images_b64_json 用于接收 Base64 图片列表
+                        JSON 字符串的自定义 Space。ImageEditor 可使用 background / layers /
+                        composite 嵌套对象。
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <details className="advanced-details">
+                    <summary>扩展请求参数</summary>
+                    <p className="help-text">
+                      为兼容服务添加 quality、response_format
+                      等参数。尺寸、模型、提示词由工作台设置；服务不支持的尺寸会返回具体错误。
                     </p>
-                  </div>
-                </>
-              ) : (
-                <details className="advanced-details">
-                  <summary>扩展请求参数</summary>
-                  <p className="help-text">
-                    为兼容服务添加 quality、response_format
-                    等参数。尺寸、模型、提示词由工作台设置；服务不支持的尺寸会返回具体错误。
-                  </p>
-                  <label className="field">
-                    JSON 参数
-                    <textarea
-                      className="code-input"
-                      rows={5}
-                      value={form.extraText}
-                      onChange={(e) => set("extraText", e.target.value)}
-                      spellCheck={false}
-                    />
-                  </label>
-                </details>
-              )}
-            </details>
+                    <label className="field">
+                      JSON 参数
+                      <textarea
+                        className="code-input"
+                        rows={5}
+                        value={form.extraText}
+                        onChange={(e) => set("extraText", e.target.value)}
+                        spellCheck={false}
+                      />
+                    </label>
+                  </details>
+                )}
+              </details>
+            )}
             {error && (
               <div className="inline-error" role="alert">
                 {error}

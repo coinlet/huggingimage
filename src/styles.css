@@ -3072,3 +3072,43 @@ svg {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.provider-types {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.mcp-configuration {
+  min-width: 0;
+}
+.mcp-tool-schema {
+  margin: -8px 0 16px;
+}
+.mcp-tool-schema summary {
+  cursor: pointer;
+  color: #aabb9c;
+  font-size: 12px;
+}
+.mcp-tool-schema pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 11px;
+  padding: 12px;
+  background: #10170e;
+  border-radius: 8px;
+}
+
+.field select {
+  min-width: 0;
+  background: #121a0f;
+  border: 1px solid #35442b;
+  color: #d6e5cb;
+  border-radius: 8px;
+  font: inherit;
+  padding: 11px;
+}
+@media (max-width: 600px) {
+  .provider-types {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

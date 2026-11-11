@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@gradio/client": "^2.7.2",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
