@@ -22,9 +22,10 @@ export function createStore(directory) {
     CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS providers (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS libraries (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, thread_id TEXT, parent_id TEXT, payload TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS images_thread ON images(thread_id);`);
-  const tables = ["providers", "jobs", "images"];
+  const tables = ["providers", "jobs", "images", "libraries"];
   const initialized = db.prepare("SELECT value FROM metadata WHERE key='initialized'").get();
   let state;
   try {
@@ -40,6 +41,14 @@ export function createStore(directory) {
                 .map((row) => JSON.parse(row.payload)),
             ]),
           );
+    state.libraries ??= [];
+    if (!state.libraries.some((library) => library.id === "local"))
+      state.libraries.unshift({
+        id: "local",
+        name: "本地素材库",
+        type: "local",
+        createdAt: new Date().toISOString(),
+      });
     for (const table of tables) {
       if (!Array.isArray(state[table]) || state[table].some((row) => !row.id))
         throw new Error(`Invalid workspace data: ${table}`);

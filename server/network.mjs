@@ -66,6 +66,7 @@ export async function requestBytes(value, options = {}, redirects = 0) {
     req.end();
   });
   if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.location) {
+    if (options.followRedirects === false) throw new Error("地址发生重定向，请填写最终素材库地址");
     if (redirects >= 4) throw new Error("上游重定向过多");
     if (method !== "GET") throw new Error("API 地址发生重定向，请填写最终 API 地址");
     const target = new URL(response.headers.location, url);

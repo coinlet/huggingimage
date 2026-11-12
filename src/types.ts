@@ -43,6 +43,8 @@ export type ImageItem = {
   threadId?: string;
   parentId?: string;
   jobId?: string;
+  versionCount?: number;
+  groupUpdatedAt?: string;
   example?: boolean;
   category?: string;
   name?: string;
@@ -157,3 +159,26 @@ export type CreationSettings = {
   guidance: number;
   maskId?: string;
 };
+
+export type AssetLibrary = {
+  id: string;
+  name: string;
+  type: "local" | "s3" | "webdav";
+  isDefault: boolean;
+  hasCredentials: boolean;
+  endpoint?: string;
+  bucket?: string;
+  region?: string;
+  prefix?: string;
+  pathStyle?: boolean;
+};
+export type AssetEntry = {
+  name: string;
+  path: string;
+  type: "directory" | "file";
+  size: number;
+  modifiedAt?: string;
+  image: boolean;
+  previewUrl?: string | null;
+};
+export type AssetListing = { path: string; entries: AssetEntry[]; nextCursor: string | null };

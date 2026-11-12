@@ -9,6 +9,7 @@ import {
   Trash2,
   Settings2,
   ImagePlus,
+  FolderPlus,
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { ImagePlaceholder } from "./ImagePlaceholder";
@@ -35,6 +36,7 @@ type Props = {
   onFavorite: (image: ImageItem) => Promise<void>;
   onCancel: (job: Job) => Promise<void>;
   onSettings: () => void;
+  onSaveToLibrary: (image: ImageItem) => void;
   onUsePrompt: (image: ImageItem) => void;
   onAdvanced: (image: ImageItem) => void;
   onDelete: (image: ImageItem) => Promise<void>;
@@ -321,6 +323,15 @@ export function ImageThread(props: Props) {
         </button>
       )}
       <div className="detail-actions">
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!ready || current.localDraft}
+          onClick={() => props.onSaveToLibrary(current)}
+        >
+          <FolderPlus size={16} />
+          保存到素材库
+        </button>
         <button
           type="button"
           className="secondary-button"

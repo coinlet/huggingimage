@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   ImagePlus,
   Layers2,
+  Folder,
   LoaderCircle,
   LogOut,
   Menu,
@@ -39,6 +40,7 @@ import {
 } from "./types";
 import { EXAMPLES } from "./examples";
 import { Settings } from "./Settings";
+import { AssetBrowser } from "./AssetBrowser";
 import { Modal } from "./Modal";
 import { ImageThread } from "./ImageThread";
 import { ImagePlaceholder } from "./ImagePlaceholder";
@@ -48,12 +50,13 @@ import { usePageScrollLock } from "./usePageScrollLock";
 import { ResolutionControl } from "./ResolutionControl";
 import { resolveResolution, type SizeSettings } from "../shared/resolution.mjs";
 
-type View = "explore" | "library" | "favorites" | "history";
+type View = "explore" | "library" | "favorites" | "history" | "assets";
 const viewLabels = {
   explore: "灵感广场",
   library: "我的作品",
   favorites: "我的收藏",
   history: "生成记录",
+  assets: "素材库",
 };
 const styles = ["全部", "自然", "摄影", "梦境", "建筑"];
 const statusLabels = {
@@ -91,6 +94,9 @@ export default function App() {
   const [providers, setProviders] = useState<Provider[]>([]),
     [images, setImages] = useState<ImageItem[]>([]),
     [jobs, setJobs] = useState<Job[]>([]);
+  const [groups, setGroups] = useState<ImageItem[]>([]);
+  const [settingsSection, setSettingsSection] = useState<"providers" | "libraries">("providers");
+  const [saveAsset, setSaveAsset] = useState<ImageItem | null>(null);
   const [view, setView] = useState<View>("explore"),
     [category, setCategory] = useState("全部"),
     [search, setSearch] = useState(""),
@@ -159,15 +165,20 @@ export default function App() {
         before.focus({ preventScroll: true });
     };
   }, [mobile, sidebar]);
+  function openSettings(section: "providers" | "libraries" = "providers") {
+    setSettingsSection(section);
+    setSettings(true);
+  }
   const notify = useCallback((message: string) => setToast(message), []);
   const refreshProviders = useCallback(async () => {
     const data = await api<Provider[]>("/providers");
     setProviders(data);
   }, []);
   const refreshWork = useCallback(async () => {
-    const [nextImages, nextJobs] = await Promise.all([
+    const [nextImages, nextJobs, nextGroups] = await Promise.all([
       api<ImageItem[]>("/images"),
       api<Job[]>("/jobs"),
+      api<ImageItem[]>("/image-groups"),
     ]);
     setImages((all) => [
       ...all.filter(
@@ -177,6 +188,7 @@ export default function App() {
       ...nextImages,
     ]);
     setJobs(nextJobs);
+    setGroups(nextGroups);
   }, []);
   const loadSession = useCallback(() => {
     api<{ authenticated: boolean; protected: boolean }>("/session")
@@ -267,6 +279,9 @@ export default function App() {
         json("PATCH", { favorite: !image.favorite }),
       );
       setImages((all) => all.map((i) => (i.id === saved.id ? saved : i)));
+      setGroups((all) =>
+        all.map((group) => (group.id === saved.id ? { ...group, ...saved } : group)),
+      );
       if (detail?.id === saved.id) setDetail(saved);
     } catch (e) {
       notify((e as Error).message);
@@ -325,6 +340,7 @@ export default function App() {
       setThreadJob("");
     }
     setView("library");
+    setCategory("全部");
     setSearch("");
     try {
       const job = await api<Job>("/jobs", json("POST", request));
@@ -420,7 +436,7 @@ export default function App() {
     event?.preventDefault();
     setSubmitError("");
     if (!provider) {
-      setSettings(true);
+      openSettings();
       return;
     }
     if (!prompt.trim()) {
@@ -487,19 +503,35 @@ export default function App() {
       setDetailBusy(false);
     }
   }
+  const workGroups = [...groups];
+  for (const image of images.filter((item) => item.localDraft)) {
+    if (!workGroups.some((group) => (group.threadId || group.id) === (image.threadId || image.id)))
+      workGroups.unshift(image);
+  }
+  const favoriteImages = [
+    ...images.filter((image) => image.favorite),
+    ...groups.filter((group) => group.favorite && !images.some((image) => image.id === group.id)),
+  ];
   const baseImages =
     view === "explore"
       ? EXAMPLES
       : view === "favorites"
-        ? [
-            ...images.filter((i) => i.favorite),
-            ...EXAMPLES.filter((i) => localFavorites.includes(i.id)),
-          ]
-        : images;
+        ? [...favoriteImages, ...EXAMPLES.filter((image) => localFavorites.includes(image.id))]
+        : view === "library"
+          ? workGroups
+          : images;
   const visible = baseImages.filter(
-    (i) =>
-      (category === "全部" || i.category === category) &&
-      (!search || `${i.prompt} ${i.name || ""}`.toLowerCase().includes(search.toLowerCase())),
+    (image) =>
+      (category === "全部" || image.category === category) &&
+      (!search ||
+        [
+          image,
+          ...(view === "library"
+            ? images.filter((child) => child.threadId === image.threadId)
+            : []),
+        ].some((item) =>
+          `${item.prompt || ""} ${item.name || ""}`.toLowerCase().includes(search.toLowerCase()),
+        )),
   );
   return (
     <div className="app-shell">
@@ -542,6 +574,7 @@ export default function App() {
               ["library", ImageIcon],
               ["favorites", Heart],
               ["history", History],
+              ["assets", Folder],
             ] as const
           ).map(([key, Icon]) => (
             <button
@@ -551,7 +584,7 @@ export default function App() {
             >
               <Icon size={18} />
               <span>{viewLabels[key]}</span>
-              {key === "library" && images.length > 0 && <small>{images.length}</small>}
+              {key === "library" && workGroups.length > 0 && <small>{workGroups.length}</small>}
               {key === "history" && active.length > 0 && <span className="activity-dot" />}
             </button>
           ))}
@@ -567,11 +600,11 @@ export default function App() {
               连接 xAI、OpenAI 或<br />
               Hugging Face Spaces
             </p>
-            <button onClick={() => setSettings(true)}>
+            <button onClick={() => openSettings()}>
               管理模型连接 <ArrowUpRight size={14} />
             </button>
           </div>
-          <button className="nav-item" onClick={() => setSettings(true)}>
+          <button className="nav-item" onClick={() => openSettings()}>
             <Settings2 size={18} /> 提供商设置
           </button>
           <button className="nav-item" onClick={() => setHelp(true)}>
@@ -628,7 +661,7 @@ export default function App() {
               className="icon-button"
               title="提供商设置"
               aria-label="提供商设置"
-              onClick={() => setSettings(true)}
+              onClick={() => openSettings()}
             >
               <Settings2 size={18} />
             </button>
@@ -636,264 +669,301 @@ export default function App() {
           </div>
         </header>
         <div className="main-content">
-          <section className="hero">
-            <div className="hero-eyebrow">
-              <span className="tiny-star">✳</span> A LITTLE PROMPT. ENDLESS POSSIBILITIES.
-            </div>
-            <h1>
-              {view === "explore" ? (
-                <>
-                  让想象，<span>自由生长。</span>
-                </>
-              ) : view === "library" ? (
-                <>
-                  每个灵感，<span>都有回响。</span>
-                </>
-              ) : view === "favorites" ? (
-                <>
-                  把喜欢的，<span>留在这里。</span>
-                </>
-              ) : (
-                <>
-                  创作的每一步，<span>都算数。</span>
-                </>
-              )}
-            </h1>
-            <p>
-              {view === "explore"
-                ? "从一个念头开始。描述、生成、编辑，创造属于你的画面。"
-                : view === "library"
-                  ? "你创造的独特画面。选择一张图片，继续探索新的可能。"
-                  : view === "favorites"
-                    ? "收藏自己的作品或灵感参考，让美好的想法随时可见。"
-                    : "查看任务进度、重新使用提示词，让创作继续。"}
-            </p>
-            <div className="hero-decoration" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-              <Sparkles size={25} />
-            </div>
-          </section>
-          <div className="gallery-toolbar">
-            <div className="gallery-tabs">
-              {view === "explore" ? (
-                styles.map((style) => (
-                  <button
-                    key={style}
-                    onClick={() => setCategory(style)}
-                    className={category === style ? "active" : ""}
-                  >
-                    {style === "全部" && <Compass size={14} />} {style}
-                  </button>
-                ))
-              ) : (
-                <span className="collection-title">
-                  {viewLabels[view]}{" "}
-                  <span>{view === "history" ? jobs.length : baseImages.length}</span>
-                </span>
-              )}
-            </div>
-            <div className="gallery-tools">
-              {showSearch && (
-                <input
-                  className="search-input"
-                  autoFocus
-                  aria-label="搜索提示词"
-                  placeholder="搜索提示词…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              )}
-              <button
-                className={`icon-button ${showSearch ? "selected" : ""}`}
-                aria-label="搜索图片"
-                onClick={() => {
-                  setShowSearch((s) => !s);
-                  setSearch("");
-                }}
-              >
-                <Search size={17} />
-              </button>
-              <span className="toolbar-divider" />
-              <button
-                className="sort-button"
-                onClick={() => {
-                  if (view === "explore") notify("灵感广场展示精选摄影参考");
-                  else
-                    refreshWork()
-                      .then(() => notify("作品库已刷新"))
-                      .catch((e) => notify(e.message));
-                }}
-              >
-                {view === "explore" ? "精选灵感" : "刷新"}
-                {view === "explore" ? <Sparkles size={13} /> : <RefreshCw size={13} />}
-              </button>
-            </div>
-          </div>
-          {view === "history" ? (
-            <div className="jobs-list">
-              {jobs
-                .filter((j) => !search || j.prompt.includes(search))
-                .map((job) => (
-                  <article className="job-row" key={job.id}>
-                    <div className={`job-icon ${job.status}`}>
-                      {["running", "queued"].includes(job.status) ? (
-                        <LoaderCircle size={20} className="spin" />
-                      ) : job.status === "succeeded" ? (
-                        <Check size={20} />
-                      ) : (
-                        <ImageIcon size={20} />
-                      )}
-                    </div>
-                    <div className="job-info">
-                      <strong>{job.prompt}</strong>
-                      <span>
-                        {job.providerName} · {job.mode === "edit" ? "图片编辑" : "图片生成"} ·{" "}
-                        {job.count} 张 · {formatDate(job.createdAt)}
-                      </span>
-                      {job.error && <p className="job-error">{job.error}</p>}
-                    </div>
-                    <span className={`job-status ${job.status}`}>{statusLabels[job.status]}</span>
-                    {["queued", "running"].includes(job.status) ? (
-                      <button className="secondary-button" onClick={() => cancel(job)}>
-                        取消
-                      </button>
-                    ) : (
-                      <button
-                        className="icon-button"
-                        title="复用提示词"
-                        aria-label="复用提示词"
-                        onClick={() => {
-                          setPrompt(job.prompt);
-                          textarea.current?.focus();
-                        }}
-                      >
-                        <RefreshCw size={16} />
-                      </button>
-                    )}
-                  </article>
-                ))}
-              {!jobs.length && <Empty view="history" onAction={() => textarea.current?.focus()} />}
-            </div>
+          {view === "assets" ? (
+            <AssetBrowser
+              onManage={() => openSettings("libraries")}
+              onUse={(image) => {
+                setSource(image);
+                setMask(null);
+                setMode("edit");
+                setThreadJob("");
+                setFocusImageId(image.id);
+                setDetail(image);
+              }}
+            />
           ) : (
             <>
-              {view === "library" && active.length > 0 && (
-                <div className="active-jobs">
-                  {active.map((job) => (
-                    <div className="active-job" key={job.id}>
-                      <div className="generating-orb">
-                        <Sparkles size={20} />
-                      </div>
-                      <div>
-                        <strong>
-                          {job.status === "queued" ? "好想法值得等待" : "正在让想象成形…"}
-                        </strong>
-                        <p>{job.prompt}</p>
-                        <span>
-                          {job.providerName} · {job.count} 张 · {statusLabels[job.status]}
-                        </span>
-                      </div>
-                      <button
-                        className="icon-button"
-                        aria-label="取消任务"
-                        onClick={() => cancel(job)}
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ))}
+              <section className="hero">
+                <div className="hero-eyebrow">
+                  <span className="tiny-star">✳</span> A LITTLE PROMPT. ENDLESS POSSIBILITIES.
                 </div>
-              )}
-              {visible.length > 0 ? (
-                <div className="image-grid">
-                  {visible.map((image, index) => (
-                    <article
-                      key={image.id}
-                      className="image-card"
-                      style={{ animationDelay: `${Math.min(index, 7) * 45}ms` }}
-                    >
-                      <button
-                        className="image-open"
-                        aria-label={`查看${image.name || image.prompt}`}
-                        onClick={() => {
-                          setFocusImageId(image.id);
-                          setThreadJob("");
-                          setDetail(image);
-                          setDeleteId(null);
-                        }}
-                      >
-                        {image.status && image.status !== "succeeded" ? (
-                          <ImagePlaceholder image={image} compact />
-                        ) : (
-                          <img
-                            src={image.thumbnail}
-                            alt={image.name || image.prompt}
-                            loading={index < 4 ? "eager" : "lazy"}
-                          />
-                        )}
-                      </button>
-                      <div className="card-top">
-                        <span className="image-label">
-                          {image.example
-                            ? image.category
-                            : image.mode === "edit"
-                              ? "图片编辑"
-                              : "AI 创作"}
-                        </span>
-                        <button
-                          className={`favorite-button ${isFavorite(image) ? "favorited" : ""}`}
-                          onClick={() => favorite(image)}
-                          title="收藏图片"
-                          aria-label={isFavorite(image) ? "取消收藏" : "收藏图片"}
-                        >
-                          <Heart size={16} fill={isFavorite(image) ? "currentColor" : "none"} />
-                        </button>
-                      </div>
-                      <div className="card-bottom">
-                        <div>
-                          <h3>{image.name || image.prompt}</h3>
-                          <span>{image.example ? "灵感参考 · 摄影作品" : image.providerName}</span>
-                        </div>
-                        <button
-                          className="remix-button"
-                          onClick={() => usePrompt(image)}
-                          aria-label="使用提示词"
-                        >
-                          <ArrowUpRight size={17} />
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                <h1>
+                  {view === "explore" ? (
+                    <>
+                      让想象，<span>自由生长。</span>
+                    </>
+                  ) : view === "library" ? (
+                    <>
+                      每个灵感，<span>都有回响。</span>
+                    </>
+                  ) : view === "favorites" ? (
+                    <>
+                      把喜欢的，<span>留在这里。</span>
+                    </>
+                  ) : (
+                    <>
+                      创作的每一步，<span>都算数。</span>
+                    </>
+                  )}
+                </h1>
+                <p>
+                  {view === "explore"
+                    ? "从一个念头开始。描述、生成、编辑，创造属于你的画面。"
+                    : view === "library"
+                      ? "你创造的独特画面。选择一张图片，继续探索新的可能。"
+                      : view === "favorites"
+                        ? "收藏自己的作品或灵感参考，让美好的想法随时可见。"
+                        : "查看任务进度、重新使用提示词，让创作继续。"}
+                </p>
+                <div className="hero-decoration" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                  <Sparkles size={25} />
                 </div>
-              ) : (
-                <Empty
-                  view={search ? "search" : view}
-                  onAction={() => {
-                    if (view === "favorites") go("explore");
-                    else textarea.current?.focus();
-                  }}
-                />
-              )}
-              {view === "library" && jobs.some((j) => j.status === "failed") && (
-                <div className="recent-error">
-                  <AlertCircle size={16} />
-                  <span>最近有任务未完成，查看生成记录了解原因。</span>
-                  <button onClick={() => go("history")}>
-                    查看记录 <ArrowUpRight size={13} />
+              </section>
+              <div className="gallery-toolbar">
+                <div className="gallery-tabs">
+                  {view === "explore" ? (
+                    styles.map((style) => (
+                      <button
+                        key={style}
+                        onClick={() => setCategory(style)}
+                        className={category === style ? "active" : ""}
+                      >
+                        {style === "全部" && <Compass size={14} />} {style}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="collection-title">
+                      {viewLabels[view]}{" "}
+                      <span>{view === "history" ? jobs.length : baseImages.length}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="gallery-tools">
+                  {showSearch && (
+                    <input
+                      className="search-input"
+                      autoFocus
+                      aria-label="搜索提示词"
+                      placeholder="搜索提示词…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  )}
+                  <button
+                    className={`icon-button ${showSearch ? "selected" : ""}`}
+                    aria-label="搜索图片"
+                    onClick={() => {
+                      setShowSearch((s) => !s);
+                      setSearch("");
+                    }}
+                  >
+                    <Search size={17} />
+                  </button>
+                  <span className="toolbar-divider" />
+                  <button
+                    className="sort-button"
+                    onClick={() => {
+                      if (view === "explore") notify("灵感广场展示精选摄影参考");
+                      else
+                        refreshWork()
+                          .then(() => notify("作品库已刷新"))
+                          .catch((e) => notify(e.message));
+                    }}
+                  >
+                    {view === "explore" ? "精选灵感" : "刷新"}
+                    {view === "explore" ? <Sparkles size={13} /> : <RefreshCw size={13} />}
                   </button>
                 </div>
-              )}
-              {view === "explore" && (
-                <p className="gallery-caption">
-                  <span /> 灵感没有边界，下一张由你创造。
-                  <span />
-                </p>
+              </div>
+              {view === "history" ? (
+                <div className="jobs-list">
+                  {jobs
+                    .filter((j) => !search || j.prompt.includes(search))
+                    .map((job) => (
+                      <article className="job-row" key={job.id}>
+                        <div className={`job-icon ${job.status}`}>
+                          {["running", "queued"].includes(job.status) ? (
+                            <LoaderCircle size={20} className="spin" />
+                          ) : job.status === "succeeded" ? (
+                            <Check size={20} />
+                          ) : (
+                            <ImageIcon size={20} />
+                          )}
+                        </div>
+                        <div className="job-info">
+                          <strong>{job.prompt}</strong>
+                          <span>
+                            {job.providerName} · {job.mode === "edit" ? "图片编辑" : "图片生成"} ·{" "}
+                            {job.count} 张 · {formatDate(job.createdAt)}
+                          </span>
+                          {job.error && <p className="job-error">{job.error}</p>}
+                        </div>
+                        <span className={`job-status ${job.status}`}>
+                          {statusLabels[job.status]}
+                        </span>
+                        {["queued", "running"].includes(job.status) ? (
+                          <button className="secondary-button" onClick={() => cancel(job)}>
+                            取消
+                          </button>
+                        ) : (
+                          <button
+                            className="icon-button"
+                            title="复用提示词"
+                            aria-label="复用提示词"
+                            onClick={() => {
+                              setPrompt(job.prompt);
+                              textarea.current?.focus();
+                            }}
+                          >
+                            <RefreshCw size={16} />
+                          </button>
+                        )}
+                      </article>
+                    ))}
+                  {!jobs.length && (
+                    <Empty view="history" onAction={() => textarea.current?.focus()} />
+                  )}
+                </div>
+              ) : (
+                <>
+                  {view === "library" && active.length > 0 && (
+                    <div className="active-jobs">
+                      {active.map((job) => (
+                        <div className="active-job" key={job.id}>
+                          <div className="generating-orb">
+                            <Sparkles size={20} />
+                          </div>
+                          <div>
+                            <strong>
+                              {job.status === "queued" ? "好想法值得等待" : "正在让想象成形…"}
+                            </strong>
+                            <p>{job.prompt}</p>
+                            <span>
+                              {job.providerName} · {job.count} 张 · {statusLabels[job.status]}
+                            </span>
+                          </div>
+                          <button
+                            className="icon-button"
+                            aria-label="取消任务"
+                            onClick={() => cancel(job)}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {visible.length > 0 ? (
+                    <div className="image-grid">
+                      {visible.map((image, index) => (
+                        <article
+                          key={image.id}
+                          className="image-card"
+                          style={{ animationDelay: `${Math.min(index, 7) * 45}ms` }}
+                        >
+                          <button
+                            className="image-open"
+                            aria-label={`查看${image.name || image.prompt}`}
+                            onClick={() => {
+                              setFocusImageId(image.id);
+                              setThreadJob("");
+                              setDetail(image);
+                              setDeleteId(null);
+                            }}
+                          >
+                            {image.status && image.status !== "succeeded" ? (
+                              <ImagePlaceholder image={image} compact />
+                            ) : (
+                              <img
+                                src={image.thumbnail}
+                                alt={image.name || image.prompt}
+                                loading={index < 4 ? "eager" : "lazy"}
+                              />
+                            )}
+                          </button>
+                          <div className="card-top">
+                            <span className="image-label">
+                              {image.example
+                                ? image.category
+                                : image.kind === "upload"
+                                  ? "上传原图"
+                                  : image.mode === "edit"
+                                    ? "图片编辑"
+                                    : "AI 创作"}
+                            </span>
+                            <button
+                              className={`favorite-button ${isFavorite(image) ? "favorited" : ""}`}
+                              onClick={() => favorite(image)}
+                              title="收藏图片"
+                              aria-label={isFavorite(image) ? "取消收藏" : "收藏图片"}
+                            >
+                              <Heart size={16} fill={isFavorite(image) ? "currentColor" : "none"} />
+                            </button>
+                          </div>
+                          {view === "library" && (image.versionCount || 1) > 1 && (
+                            <span className="group-version-badge">
+                              <Layers2 size={12} />
+                              {image.versionCount} 个版本
+                            </span>
+                          )}
+                          <div className="card-bottom">
+                            <div>
+                              <h3>{image.name || image.prompt || "原始图片"}</h3>
+                              <span>
+                                {image.example
+                                  ? "灵感参考 · 摄影作品"
+                                  : image.providerName ||
+                                    (image.kind === "upload" ? "上传原图" : "创作记录")}
+                              </span>
+                            </div>
+                            <button
+                              className="remix-button"
+                              onClick={() => usePrompt(image)}
+                              aria-label="使用提示词"
+                            >
+                              <ArrowUpRight size={17} />
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty
+                      view={search ? "search" : view}
+                      onAction={() => {
+                        if (view === "favorites") go("explore");
+                        else textarea.current?.focus();
+                      }}
+                    />
+                  )}
+                  {view === "library" && jobs.some((j) => j.status === "failed") && (
+                    <div className="recent-error">
+                      <AlertCircle size={16} />
+                      <span>最近有任务未完成，查看生成记录了解原因。</span>
+                      <button onClick={() => go("history")}>
+                        查看记录 <ArrowUpRight size={13} />
+                      </button>
+                    </div>
+                  )}
+                  {view === "explore" && (
+                    <p className="gallery-caption">
+                      <span /> 灵感没有边界，下一张由你创造。
+                      <span />
+                    </p>
+                  )}
+                </>
               )}
             </>
           )}
         </div>
-        <div className="composer-dock" ref={composerDock}>
+        <div
+          className="composer-dock"
+          ref={composerDock}
+          style={view === "assets" ? { display: "none" } : undefined}
+        >
           <form
             className={`composer ${mode === "edit" ? "editing" : ""}`}
             onSubmit={generate}
@@ -1252,8 +1322,9 @@ export default function App() {
           onEdit={editInThread}
           onRetry={retryImage}
           onFavorite={favorite}
+          onSaveToLibrary={(image) => setSaveAsset(image)}
           onCancel={cancel}
-          onSettings={() => setSettings(true)}
+          onSettings={() => openSettings()}
           onUsePrompt={usePrompt}
           onAdvanced={(image) => {
             setSource(image);
@@ -1280,6 +1351,22 @@ export default function App() {
             notify("图片已删除，其他版本已保留");
           }}
         />
+      )}
+      {saveAsset && (
+        <Modal
+          title="保存到素材库"
+          className="asset-destination-modal"
+          onClose={() => setSaveAsset(null)}
+        >
+          <AssetBrowser
+            image={saveAsset}
+            onManage={() => openSettings("libraries")}
+            onSaved={() => {
+              setSaveAsset(null);
+              notify("图片已保存到素材库");
+            }}
+          />
+        </Modal>
       )}
       {detail?.example && (
         <Modal

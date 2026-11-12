@@ -10,6 +10,7 @@ import { validateSpace, inspectSpace, runCompatible, runSpace } from "./provider
 import { discoverConfiguration } from "./space-discovery.mjs";
 import { repairEncodedEditProvider } from "./gradio-images.mjs";
 import { runMcp, inspectMcp, mcpAuthHeaders } from "./mcp-provider.mjs";
+import { mountLibraries } from "./libraries.mjs";
 
 export function createApp(options = {}) {
   const adminToken = options.adminToken ?? process.env.ADMIN_TOKEN ?? "";
@@ -341,6 +342,29 @@ export function createApp(options = {}) {
         .reverse(),
     ),
   );
+  app.get("/api/image-groups", (_req, res) => {
+    const groups = new Map();
+    for (const image of state.images) {
+      const id = image.threadId || image.id;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(image);
+    }
+    res.json(
+      [...groups.entries()]
+        .filter(([, images]) => images.some((i) => i.kind === "generated"))
+        .map(([id, images]) => {
+          const first = images.find((i) => i.id === id) || images[0];
+          return {
+            ...first,
+            prompt: first.prompt || "",
+            versionCount: images.length,
+            groupUpdatedAt: images.at(-1).createdAt || first.createdAt || "",
+          };
+        })
+        .sort((a, b) => b.groupUpdatedAt.localeCompare(a.groupUpdatedAt)),
+    );
+  });
+  mountLibraries(app, { store, saveImage, transport: options.libraryRequest });
   app.get("/api/images/:id/thread", (req, res) => {
     const image = state.images.find((i) => i.id === req.params.id);
     if (!image) return res.status(404).json({ error: "图片不存在" });

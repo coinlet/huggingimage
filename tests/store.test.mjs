@@ -141,3 +141,24 @@ test("a restart marks unfinished image slots failed and retains their IDs and pr
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("upgrading an existing SQLite workspace adds a local asset library without changing providers", () => {
+  const dir = directory();
+  let store = createStore(dir);
+  const encrypted = store.seal("existing-provider-key");
+  store.state.providers.push({ id: "existing", secret: encrypted });
+  store.save();
+  store.close();
+  const db = new DatabaseSync(path.join(dir, "workspace.sqlite"));
+  db.exec("DROP TABLE libraries");
+  db.close();
+  store = createStore(dir);
+  try {
+    assert.equal(store.state.libraries.length, 1);
+    assert.equal(store.state.libraries[0].id, "local");
+    assert.equal(store.open(store.state.providers[0].secret), "existing-provider-key");
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
