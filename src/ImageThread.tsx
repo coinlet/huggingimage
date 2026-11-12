@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { ImagePlaceholder } from "./ImagePlaceholder";
+import { ImageZoomViewer } from "./ImageZoomViewer";
 import { CreationOptions, validateCreationSettings } from "./CreationOptions";
 import { useMobileScreen } from "./useMobileScreen";
 import type { SizeSettings } from "../shared/resolution.mjs";
@@ -44,6 +45,10 @@ type Props = {
 
 export function ImageThread(props: Props) {
   const mobile = useMobileScreen();
+  const [zoomedImage, setZoomedImage] = useState<ImageItem | null>(null);
+  const zoomActive = useRef(false);
+  zoomActive.current = Boolean(zoomedImage);
+  const imageTap = useRef({ pointerId: -1, x: 0, y: 0, moved: false });
   const provider = props.providers.find((p) => p.id === props.providerId);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [optionError, setOptionError] = useState("");
@@ -132,7 +137,7 @@ export function ImageThread(props: Props) {
   }, [props.image.id, props.images, props.jobs, pending, reload]);
 
   useEffect(() => {
-    if (!props.focusImageId) return;
+    if (!props.focusImageId || zoomActive.current) return;
     const target = props.images.find((i) => i.id === props.focusImageId);
     if (target?.threadId !== props.image.threadId) return;
     focusSlide.current = props.focusImageId;
@@ -475,11 +480,52 @@ export function ImageThread(props: Props) {
                       preview={items.find((i) => i.id === image.parentId)?.thumbnail}
                     />
                   ) : (
-                    <img
-                      src={image.url}
-                      alt={image.prompt || image.name || "原始图片"}
-                      draggable={false}
-                    />
+                    <button
+                      type="button"
+                      className="thread-image-open"
+                      aria-label="放大查看图片"
+                      tabIndex={image.id === selected ? 0 : -1}
+                      onPointerDown={(event) => {
+                        if (event.isPrimary)
+                          imageTap.current = {
+                            pointerId: event.pointerId,
+                            x: event.clientX,
+                            y: event.clientY,
+                            moved: false,
+                          };
+                        else imageTap.current.moved = true;
+                      }}
+                      onPointerMove={(event) => {
+                        if (
+                          imageTap.current.pointerId === event.pointerId &&
+                          Math.hypot(
+                            event.clientX - imageTap.current.x,
+                            event.clientY - imageTap.current.y,
+                          ) > 8
+                        )
+                          imageTap.current.moved = true;
+                      }}
+                      onPointerCancel={() => {
+                        imageTap.current.moved = true;
+                      }}
+                      onClick={(event) => {
+                        if (event.detail !== 0 && imageTap.current.moved) return;
+                        setSelected(image.id);
+                        const slide = items.findIndex((item) => item.id === image.id);
+                        track.current?.scrollTo({
+                          left: (track.current?.clientWidth || 0) * slide,
+                          behavior: "instant",
+                        });
+                        setZoomedImage(image);
+                      }}
+                    >
+                      <img
+                        src={image.url}
+                        alt={image.prompt || image.name || "原始图片"}
+                        draggable={false}
+                      />
+                      <span className="thread-image-zoom-hint">点击放大</span>
+                    </button>
                   )}
                   <figcaption>
                     {image.kind === "upload"
@@ -623,6 +669,13 @@ export function ImageThread(props: Props) {
           </div>
         </div>
       </Modal>
+      {zoomedImage && (
+        <ImageZoomViewer
+          key={zoomedImage.id}
+          image={zoomedImage}
+          onClose={() => setZoomedImage(null)}
+        />
+      )}
       {mobile && optionsOpen && (
         <Modal
           title="创作设置"

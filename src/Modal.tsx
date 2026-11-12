@@ -8,12 +8,14 @@ export function Modal({
   onClose,
   className = "",
   backdropClassName = "",
+  hideHeader = false,
 }: {
   title: string;
   children: ReactNode;
   onClose?: () => void;
   className?: string;
   backdropClassName?: string;
+  hideHeader?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   usePageScrollLock(true);
@@ -79,17 +81,19 @@ export function Modal({
         tabIndex={-1}
         ref={ref}
       >
-        <div className="modal-heading">
-          <div>
-            <span className="eyebrow">IMAGINE WORKSPACE</span>
-            <h2>{title}</h2>
+        {!hideHeader && (
+          <div className="modal-heading">
+            <div>
+              <span className="eyebrow">IMAGINE WORKSPACE</span>
+              <h2>{title}</h2>
+            </div>
+            {onClose && (
+              <button className="icon-button" aria-label="关闭窗口" onClick={onClose}>
+                <X size={20} />
+              </button>
+            )}
           </div>
-          {onClose && (
-            <button className="icon-button" aria-label="关闭窗口" onClick={onClose}>
-              <X size={20} />
-            </button>
-          )}
-        </div>
+        )}
         {children}
       </div>
     </div>,
