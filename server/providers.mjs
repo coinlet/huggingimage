@@ -1,6 +1,7 @@
 import { Client, handle_file } from "@gradio/client";
 import { requestJson, validateUrl } from "./network.mjs";
 import { closeGradioClient } from "./gradio-client-lifecycle.mjs";
+import { readSpaceSchema, mapAspectRatio } from "./gradio-schema.mjs";
 import {
   encodedImageVariable,
   usesSourceImage,
@@ -73,6 +74,7 @@ export async function connectSpace(provider, key) {
   });
 }
 export async function inspectSpace(provider, key) {
+  const controller = new AbortController();
   let client,
     expired = false,
     timer;
@@ -81,7 +83,7 @@ export async function inspectSpace(provider, key) {
     try {
       client = await connectSpace(provider, key);
       if (expired) throw new Error("Space API 读取超时");
-      return await client.view_api();
+      return await readSpaceSchema(client, key, controller.signal);
     } catch (error) {
       primaryError = error;
       throw error;
@@ -95,6 +97,7 @@ export async function inspectSpace(provider, key) {
       new Promise((_, reject) => {
         timer = setTimeout(() => {
           expired = true;
+          controller.abort();
           const timeoutError = new Error(
             "读取 Space API 超过 45 秒，请检查访问权限或稍后重试；休眠 Space 可能需要先在 HF 页面启动",
           );
@@ -202,6 +205,10 @@ export async function runSpace(provider, key, job, source, mask, signal, connect
   signal.addEventListener("abort", cancel);
   let primaryError;
   try {
+    const ratioFields = Object.entries(template).filter(
+      ([, value]) => value === "{{aspect_ratio}}",
+    );
+    const api = ratioFields.length ? await readSpaceSchema(client, key, signal) : null;
     const results = [];
     for (let i = 0; i < job.count; i++) {
       signal.throwIfAborted();
@@ -223,6 +230,12 @@ export async function runSpace(provider, key, job, source, mask, signal, connect
         mask: mask ? handle_file(new Blob([mask], { type: "image/png" })) : null,
       };
       const parameters = mapTemplate(template, context);
+      for (const [name] of ratioFields) {
+        const parameter = api?.named_endpoints?.[endpoint]?.parameters?.find(
+          (p) => p.parameter_name === name,
+        );
+        if (parameter) parameters[name] = mapAspectRatio(job.ratio, parameter);
+      }
       for (const name of encodedInputs)
         if (parameters[name] == null || parameters[name] === "" || parameters[name] === "[]")
           parameters[name] = context[encodedImageVariable(name)];

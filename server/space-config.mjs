@@ -1,5 +1,6 @@
 import { variables } from "./providers.mjs";
 import { encodedImageVariable, usesSourceImage } from "./gradio-images.mjs";
+import { parameterChoices, isQwenAioEndpoint } from "./gradio-schema.mjs";
 
 const normalized = (value) =>
   String(value || "")
@@ -84,13 +85,7 @@ function nullable(parameter) {
   );
 }
 function choices(parameter) {
-  const schema = parameter.type;
-  if (!schema || typeof schema !== "object") return [];
-  return (
-    schema.enum ||
-    schema.anyOf?.filter((item) => Object.hasOwn(item, "const")).map((item) => item.const) ||
-    []
-  );
+  return parameterChoices(parameter);
 }
 function describeBounds(parameter) {
   const description = `${parameter.description || ""} ${parameter.type?.description || ""}`;
@@ -112,6 +107,7 @@ export function spaceCandidates(api) {
         endpoint.startsWith("/") && Array.isArray(info?.parameters) && Array.isArray(info?.returns),
     )
     .map(([endpoint, info]) => {
+      const qwenAio = isQwenAioEndpoint(info);
       const template = {},
         missing = [],
         warnings = [],
@@ -130,8 +126,16 @@ export function spaceCandidates(api) {
           continue;
         }
         if (secretName.test(name)) {
+          if (qwenAio && name === "pe_api_key") {
+            template[name] = "";
+            continue;
+          }
           if (!parameter.parameter_has_default) missing.push(name);
           warnings.push(`参数 ${name} 涉及凭据，未自动填写`);
+          continue;
+        }
+        if (qwenAio && /^(custom_(repo|file)_[1-4]|pe_base_url)$/.test(name)) {
+          template[name] = "";
           continue;
         }
         const mapped = role(parameter);
@@ -201,6 +205,17 @@ export function spaceCandidates(api) {
           ]),
         );
       }
+      if (qwenAio) {
+        template.mode = "Edit Image (1 Ref)";
+        template.enhance_mode = "Off";
+        if (generateTemplate) {
+          generateTemplate.mode = "Text to Image";
+          generateTemplate.enhance_mode = "Off";
+        }
+        warnings.push(
+          "已识别 Qwen AIO 模式：配置文生图与单图编辑，提示词增强已关闭；多图参考和双图合成尚不受当前工作台支持。",
+        );
+      }
       const score =
         100 + (/infer|predict|generate|edit/i.test(endpoint) ? 15 : 0) - missing.length * 30;
       return {
@@ -216,6 +231,7 @@ export function spaceCandidates(api) {
         warnings,
         defaults,
         score,
+        adapter: qwenAio ? "qwen-aio" : undefined,
       };
     });
 }
@@ -244,6 +260,7 @@ function assemble(space, candidates, selected, source = "schema", moreWarnings =
     [generation, editing].filter(Boolean).every((c) => !c.missing.length);
   return {
     source,
+    adapter: generation?.adapter || editing?.adapter,
     ready,
     name: space.startsWith("https://")
       ? new URL(space).hostname.split(".")[0]

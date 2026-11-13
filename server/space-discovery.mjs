@@ -7,6 +7,9 @@ export async function discoverConfiguration(api, space, options = {}) {
   const base = options.ai?.baseUrl ?? process.env.CONFIG_AI_BASE_URL;
   const model = options.ai?.model ?? process.env.CONFIG_AI_MODEL;
   if (!key || !base || !model) return { ...detected, aiAvailable: false };
+  // This known contract already has mode-specific mappings and disabled optional
+  // enhancement credentials. A generic AI mapping must not undo those choices.
+  if (detected.ready && detected.adapter === "qwen-aio") return { ...detected, aiAvailable: true };
   try {
     const endpoint = validateUrl(base).href.replace(/\/+$/, "");
     const schema = JSON.stringify(aiSchema(api));

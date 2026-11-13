@@ -1,0 +1,388 @@
+{
+  "named_endpoints": {
+    "/update_mode_ui": {
+      "parameters": [
+        {
+          "parameter_name": "mode",
+          "label": "mode",
+          "component": "Radio",
+          "parameter_has_default": true,
+          "parameter_default": "Text to Image",
+          "type": {
+            "type": "string",
+            "enum": [
+              "Text to Image",
+              "Multi-Image Reference (1-6 Refs)",
+              "Edit Image (1 Ref)",
+              "Transform & Swap (2 Refs)",
+              "Transparent PNG"
+            ]
+          }
+        }
+      ],
+      "returns": [
+        {
+          "component": "Image"
+        }
+      ]
+    },
+    "/generate": {
+      "parameters": [
+        {
+          "parameter_name": "prompt",
+          "label": "prompt",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "negative_prompt",
+          "label": "negative_prompt",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "mode",
+          "label": "mode",
+          "component": "Radio",
+          "parameter_has_default": true,
+          "parameter_default": "Text to Image",
+          "type": {
+            "type": "string",
+            "enum": [
+              "Text to Image",
+              "Multi-Image Reference (1-6 Refs)",
+              "Edit Image (1 Ref)",
+              "Transform & Swap (2 Refs)",
+              "Transparent PNG"
+            ]
+          }
+        },
+        {
+          "parameter_name": "ref_image_1",
+          "label": "ref_image_1",
+          "component": "Image",
+          "parameter_has_default": true,
+          "parameter_default": null,
+          "type": {
+            "type": "object",
+            "title": "ImageData"
+          }
+        },
+        {
+          "parameter_name": "ref_image_2",
+          "label": "ref_image_2",
+          "component": "Image",
+          "parameter_has_default": true,
+          "parameter_default": null,
+          "type": {
+            "type": "object",
+            "title": "ImageData"
+          }
+        },
+        {
+          "parameter_name": "multi_refs",
+          "label": "multi_refs",
+          "component": "Gallery",
+          "parameter_has_default": true,
+          "parameter_default": [],
+          "type": {
+            "type": "array",
+            "title": "GalleryData"
+          }
+        },
+        {
+          "parameter_name": "lora_1",
+          "label": "lora_1",
+          "component": "Dropdown",
+          "parameter_has_default": true,
+          "parameter_default": "None (Base Uncensored)",
+          "type": {
+            "type": "string",
+            "enum": ["None (Base Uncensored)", "Anime Consistency", "Custom HuggingFace LoRA..."]
+          }
+        },
+        {
+          "parameter_name": "lora_1_strength",
+          "label": "lora_1_strength",
+          "component": "Slider",
+          "parameter_has_default": true,
+          "parameter_default": 1,
+          "type": {
+            "type": "number"
+          }
+        },
+        {
+          "parameter_name": "custom_repo_1",
+          "label": "custom_repo_1",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "custom_file_1",
+          "label": "custom_file_1",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "lora_2",
+          "label": "lora_2",
+          "component": "Dropdown",
+          "parameter_has_default": true,
+          "parameter_default": "None (Base Uncensored)",
+          "type": {
+            "type": "string",
+            "enum": ["None (Base Uncensored)", "Anime Consistency", "Custom HuggingFace LoRA..."]
+          }
+        },
+        {
+          "parameter_name": "lora_2_strength",
+          "label": "lora_2_strength",
+          "component": "Slider",
+          "parameter_has_default": true,
+          "parameter_default": 1,
+          "type": {
+            "type": "number"
+          }
+        },
+        {
+          "parameter_name": "custom_repo_2",
+          "label": "custom_repo_2",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "custom_file_2",
+          "label": "custom_file_2",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "lora_3",
+          "label": "lora_3",
+          "component": "Dropdown",
+          "parameter_has_default": true,
+          "parameter_default": "None (Base Uncensored)",
+          "type": {
+            "type": "string",
+            "enum": ["None (Base Uncensored)", "Anime Consistency", "Custom HuggingFace LoRA..."]
+          }
+        },
+        {
+          "parameter_name": "lora_3_strength",
+          "label": "lora_3_strength",
+          "component": "Slider",
+          "parameter_has_default": true,
+          "parameter_default": 1,
+          "type": {
+            "type": "number"
+          }
+        },
+        {
+          "parameter_name": "custom_repo_3",
+          "label": "custom_repo_3",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "custom_file_3",
+          "label": "custom_file_3",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "lora_4",
+          "label": "lora_4",
+          "component": "Dropdown",
+          "parameter_has_default": true,
+          "parameter_default": "None (Base Uncensored)",
+          "type": {
+            "type": "string",
+            "enum": ["None (Base Uncensored)", "Anime Consistency", "Custom HuggingFace LoRA..."]
+          }
+        },
+        {
+          "parameter_name": "lora_4_strength",
+          "label": "lora_4_strength",
+          "component": "Slider",
+          "parameter_has_default": true,
+          "parameter_default": 1,
+          "type": {
+            "type": "number"
+          }
+        },
+        {
+          "parameter_name": "custom_repo_4",
+          "label": "custom_repo_4",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "custom_file_4",
+          "label": "custom_file_4",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "aspect_ratio",
+          "label": "aspect_ratio",
+          "component": "Dropdown",
+          "parameter_has_default": true,
+          "parameter_default": "Square · 1:1 (1024x1024)",
+          "type": {
+            "type": "string",
+            "enum": [
+              "Square · 1:1 (1024x1024)",
+              "Landscape · 16:9 (1344x768)",
+              "Portrait · 9:16 (768x1344)",
+              "Landscape · 4:3 (1152x864)",
+              "Portrait · 3:4 (864x1152)"
+            ]
+          }
+        },
+        {
+          "parameter_name": "enhance_mode",
+          "label": "enhance_mode",
+          "component": "Radio",
+          "parameter_has_default": true,
+          "parameter_default": "Auto",
+          "type": {
+            "type": "string",
+            "enum": ["Auto", "On", "Off"]
+          }
+        },
+        {
+          "parameter_name": "cfg_scale",
+          "label": "cfg_scale",
+          "component": "Slider",
+          "parameter_has_default": true,
+          "parameter_default": 1,
+          "type": {
+            "type": "number"
+          }
+        },
+        {
+          "parameter_name": "steps",
+          "label": "steps",
+          "component": "Slider",
+          "parameter_has_default": true,
+          "parameter_default": 30,
+          "type": {
+            "type": "number"
+          }
+        },
+        {
+          "parameter_name": "seed",
+          "label": "seed",
+          "component": "Number",
+          "parameter_has_default": true,
+          "parameter_default": 42,
+          "type": {
+            "type": "integer"
+          }
+        },
+        {
+          "parameter_name": "randomize_seed",
+          "label": "randomize_seed",
+          "component": "Checkbox",
+          "parameter_has_default": true,
+          "parameter_default": true,
+          "type": {
+            "type": "boolean"
+          }
+        },
+        {
+          "parameter_name": "pe_api_key",
+          "label": "pe_api_key",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "pe_model",
+          "label": "pe_model",
+          "component": "Textbox",
+          "parameter_has_default": true,
+          "parameter_default": "deepseek/deepseek-v4.1-flash",
+          "type": {
+            "type": "string"
+          }
+        },
+        {
+          "parameter_name": "pe_base_url",
+          "label": "pe_base_url",
+          "component": "Textbox",
+          "parameter_has_default": false,
+          "parameter_default": null,
+          "type": {
+            "type": "string"
+          }
+        }
+      ],
+      "returns": [
+        {
+          "component": "Image",
+          "type": {
+            "title": "ImageData",
+            "type": "object"
+          }
+        },
+        {
+          "component": "File"
+        },
+        {
+          "component": "Number"
+        },
+        {
+          "component": "Textbox"
+        },
+        {
+          "component": "Textbox"
+        }
+      ]
+    }
+  },
+  "unnamed_endpoints": {}
+}
