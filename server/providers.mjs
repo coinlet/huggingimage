@@ -22,6 +22,10 @@ export const variables = [
   "guidance",
   "aspect_ratio",
   "image",
+  "image2",
+  "images",
+  "gallery_images",
+  "edit_mode",
   "image_base64",
   "image_data_uri",
   "images_b64_json",
@@ -182,7 +186,16 @@ export async function runCompatible(
   if (!images.length) throw new Error("提供商未返回图片，请确认所选模型支持图片接口");
   return images.slice(0, job.count);
 }
-export async function runSpace(provider, key, job, source, mask, signal, connector = connectSpace) {
+export async function runSpace(
+  provider,
+  key,
+  job,
+  source,
+  mask,
+  signal,
+  connector = connectSpace,
+  references = [],
+) {
   const editing = job.mode === "edit";
   const endpoint = editing ? provider.editEndpoint : provider.endpoint;
   const template = editing ? provider.editTemplate : provider.template;
@@ -223,12 +236,35 @@ export async function runSpace(provider, key, job, source, mask, signal, connect
         aspect_ratio: job.ratio,
         image_base64: source ? source.toString("base64") : null,
         image_data_uri: source ? `data:image/png;base64,${source.toString("base64")}` : null,
-        images_b64_json: JSON.stringify(
-          source ? [`data:image/png;base64,${source.toString("base64")}`] : [],
-        ),
-        image: source ? handle_file(new Blob([source], { type: "image/png" })) : null,
         mask: mask ? handle_file(new Blob([mask], { type: "image/png" })) : null,
       };
+      const files = [source, ...references]
+        .filter(Boolean)
+        .map((bytes) => handle_file(new Blob([bytes], { type: "image/png" })));
+      const multi = files.length > 1 && job.referenceMode !== "swap";
+      Object.assign(context, {
+        image: files[0] || null,
+        images: files,
+        image2:
+          job.referenceMode === "swap" || !JSON.stringify(template).includes("{{edit_mode}}")
+            ? (files[1] ?? null)
+            : null,
+        gallery_images:
+          multi || !JSON.stringify(template).includes("{{edit_mode}}")
+            ? files.map((image) => ({ image, caption: null }))
+            : [],
+        edit_mode:
+          job.referenceMode === "swap"
+            ? "Transform & Swap (2 Refs)"
+            : multi
+              ? "Multi-Image Reference (1-6 Refs)"
+              : "Edit Image (1 Ref)",
+        images_b64_json: JSON.stringify(
+          [source, ...references]
+            .filter(Boolean)
+            .map((bytes) => `data:image/png;base64,${bytes.toString("base64")}`),
+        ),
+      });
       const parameters = mapTemplate(template, context);
       for (const [name] of ratioFields) {
         const parameter = api?.named_endpoints?.[endpoint]?.parameters?.find(

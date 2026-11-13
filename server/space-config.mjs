@@ -51,7 +51,9 @@ function isImage(parameter) {
   const component = normalized(parameter.component);
   return (
     encodedImageVariable(parameter.parameter_name) ||
-    ["image", "imageeditor", "imageupload", "gallery", "multimage"].includes(component) ||
+    ["image", "imageeditor", "imageupload", "gallery", "multimage", "multiimage"].includes(
+      component,
+    ) ||
     (component === "file" &&
       /image|photo|picture|图片|照片/i.test(`${parameter.parameter_name} ${parameter.label}`)) ||
     /ImageData|ImageEditorData|GalleryData/i.test(JSON.stringify(parameter.type || ""))
@@ -62,13 +64,16 @@ function imageValue(parameter, placeholder) {
   if (encoded) return `{{${encoded}}}`;
   if (/imageeditor/i.test(parameter.component || ""))
     return { background: placeholder, layers: [], composite: placeholder };
-  if (/gallery/i.test(parameter.component || "")) return [{ image: placeholder, caption: null }];
+  if (/gallery/i.test(parameter.component || ""))
+    return placeholder === "{{image}}"
+      ? "{{gallery_images}}"
+      : [{ image: placeholder, caption: null }];
   const type = parameter.type;
   if (
     (typeof type === "object" && type?.type === "array") ||
     (typeof type === "string" && /\[\]|array|list</i.test(type))
   )
-    return [placeholder];
+    return placeholder === "{{image}}" ? "{{images}}" : [placeholder];
   return placeholder;
 }
 function isImageOutput(parameter) {
@@ -165,7 +170,9 @@ export function spaceCandidates(api) {
           } else if (parameter.parameter_has_default) template[name] = parameter.parameter_default;
           else {
             missing.push(name);
-            warnings.push(`端点 ${endpoint} 需要多张参考图；当前工作台仅提供一张`);
+            warnings.push(
+              `端点 ${endpoint} 需要独立的多图参数映射，请手动配置 {{image2}} 或图片数组变量`,
+            );
           }
         } else if (["randomizeseed", "randomseed", "randomize"].includes(normalized(name)))
           template[name] = false;
@@ -206,14 +213,16 @@ export function spaceCandidates(api) {
         );
       }
       if (qwenAio) {
-        template.mode = "Edit Image (1 Ref)";
+        template.mode = "{{edit_mode}}";
+        template.ref_image_2 = "{{image2}}";
+        template.multi_refs = "{{gallery_images}}";
         template.enhance_mode = "Off";
         if (generateTemplate) {
           generateTemplate.mode = "Text to Image";
           generateTemplate.enhance_mode = "Off";
         }
         warnings.push(
-          "已识别 Qwen AIO 模式：配置文生图与单图编辑，提示词增强已关闭；多图参考和双图合成尚不受当前工作台支持。",
+          "已识别 Qwen AIO 模式：支持单图编辑、最多 6 张参考图及双图变换与合成；提示词增强已关闭。",
         );
       }
       const score =
@@ -356,13 +365,15 @@ export function applyAiConfiguration(api, space, suggestion) {
     const missing = original.parameters
       .filter((p) => !p.parameter_has_default && !Object.hasOwn(template, p.parameter_name))
       .map((p) => p.parameter_name);
+    const requiredImages = original.parameters.filter(
+      (p) => isImage(p) && !/mask/i.test(p.parameter_name) && !p.parameter_has_default,
+    ).length;
     if (
       mode === "edit" &&
-      original.parameters.filter(
-        (p) => isImage(p) && !/mask/i.test(p.parameter_name) && !p.parameter_has_default,
-      ).length > 1
+      requiredImages > 1 &&
+      !(requiredImages === 2 && includesVariable(template, "image2"))
     )
-      missing.push("该端点需要多张参考图，当前工作台仅提供一张");
+      missing.push("多张独立参考图需分别映射 {{image}} 与 {{image2}}，更多图片请使用数组接口");
     for (const parameter of original.parameters) {
       const value = template[parameter.parameter_name];
       if (value === undefined) continue;

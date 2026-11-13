@@ -14,6 +14,8 @@ import {
 import { Modal } from "./Modal";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 import { ImageZoomViewer } from "./ImageZoomViewer";
+import { ReferenceImages } from "./ReferenceImages";
+import { validateReferences } from "../shared/references.mjs";
 import { CreationOptions, validateCreationSettings } from "./CreationOptions";
 import { useMobileScreen } from "./useMobileScreen";
 import type { SizeSettings } from "../shared/resolution.mjs";
@@ -53,6 +55,9 @@ export function ImageThread(props: Props) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [optionError, setOptionError] = useState("");
   const [uploadingMask, setUploadingMask] = useState(false);
+  const [references, setReferences] = useState<ImageItem[]>([]);
+  const [uploadingReferences, setUploadingReferences] = useState(false);
+  const [referenceMode, setReferenceMode] = useState<"reference" | "swap">("reference");
   const [mask, setMask] = useState<{ sourceId: string; image: ImageItem } | null>(null);
   const [settings, setSettings] = useState<CreationSettings>(() => ({
     ...props.initialSettings,
@@ -100,6 +105,8 @@ export function ImageThread(props: Props) {
   useEffect(() => {
     setConfirmDelete(false);
     setMask(null);
+    setReferences([]);
+    setReferenceMode("reference");
     setOptionError("");
   }, [selected]);
   useEffect(() => {
@@ -175,13 +182,21 @@ export function ImageThread(props: Props) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!prompt.trim() || busy || uploadingMask || active || !ready) return;
+    if (!prompt.trim() || busy || uploadingMask || uploadingReferences || active || !ready) return;
     setBusy(true);
     setError("");
     try {
       validateCreationSettings(settings);
+      validateReferences(
+        provider,
+        current.id,
+        references.map((i) => i.id),
+        referenceMode,
+      );
       const job = await props.onEdit(current, prompt.trim(), {
         ...settings,
+        referenceIds: references.map((i) => i.id),
+        referenceMode,
         maskId: mask?.sourceId === current.id ? mask.image.id : undefined,
       });
       setPendingId(job.id);
@@ -394,6 +409,22 @@ export function ImageThread(props: Props) {
   );
   const options = (
     <>
+      {ready && (
+        <ReferenceImages
+          key={current.id}
+          source={current}
+          provider={provider}
+          images={props.images}
+          value={references}
+          onChange={(value) => {
+            setReferences(value);
+            if (value.length) setMask(null);
+          }}
+          mode={referenceMode}
+          onMode={setReferenceMode}
+          onBusy={setUploadingReferences}
+        />
+      )}
       <CreationOptions
         providers={props.providers}
         providerId={props.providerId}
@@ -405,7 +436,7 @@ export function ImageThread(props: Props) {
         onProvidersSettings={props.onSettings}
         expanded={mobile}
       />
-      {provider?.type !== "xai" && (
+      {!references.length && provider?.type !== "xai" && (
         <div className="thread-mask-settings">
           <label className="secondary-button">
             <ImagePlus size={16} />
@@ -618,7 +649,7 @@ export function ImageThread(props: Props) {
                     }}
                   >
                     <Settings2 size={20} />
-                    <span>设置</span>
+                    <span>{references.length ? `设置 · ${references.length + 1} 图` : "设置"}</span>
                   </button>
                 )}
                 {mobile && (currentActive || active) && (
@@ -646,6 +677,7 @@ export function ImageThread(props: Props) {
                     disabled={
                       busy ||
                       uploadingMask ||
+                      uploadingReferences ||
                       !!active ||
                       !ready ||
                       !prompt.trim() ||

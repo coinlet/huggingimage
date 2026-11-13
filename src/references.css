@@ -1,0 +1,79 @@
+.reference-images {
+  display: grid;
+  gap: 10px;
+  margin-block: 12px;
+  min-width: 0;
+}
+.reference-images small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.reference-images p {
+  color: #efb395;
+  font-size: 12px;
+  margin: 0;
+}
+.reference-mode {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.reference-images select {
+  width: 100%;
+  min-width: 0;
+  padding: 9px;
+  background: #172015;
+  color: #dce8d5;
+  border: 1px solid #394333;
+  border-radius: 8px;
+}
+.reference-images-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.reference-image-tile {
+  flex: 0 0 86px;
+  position: relative;
+  display: grid;
+  gap: 4px;
+  font-size: 10px;
+}
+.reference-image-tile > img {
+  width: 86px;
+  height: 70px;
+  object-fit: contain;
+  background: #0b1009;
+  border-radius: 8px;
+}
+.reference-image-tile > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.reference-image-tile button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #283421;
+  border-radius: 6px;
+}
+.reference-image-add {
+  display: grid;
+  gap: 8px;
+}
+.reference-image-add > label {
+  cursor: pointer;
+  justify-self: start;
+}
+@media (pointer: coarse) {
+  .reference-image-tile button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}

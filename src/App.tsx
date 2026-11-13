@@ -43,6 +43,8 @@ import { Settings } from "./Settings";
 import { AssetBrowser } from "./AssetBrowser";
 import { Modal } from "./Modal";
 import { ImageThread } from "./ImageThread";
+import { ReferenceImages } from "./ReferenceImages";
+import { validateReferences } from "../shared/references.mjs";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 import { newImageId } from "./image-id";
 import { useWorkspaceViewport } from "./useWorkspaceViewport";
@@ -125,6 +127,13 @@ export default function App() {
     [guidance, setGuidance] = useState(3.5);
   const [source, setSource] = useState<ImageItem | null>(null),
     [mask, setMask] = useState<ImageItem | null>(null);
+  const [references, setReferences] = useState<ImageItem[]>([]);
+  const [referenceMode, setReferenceMode] = useState<"reference" | "swap">("reference");
+  const [uploadingReferences, setUploadingReferences] = useState(false);
+  useEffect(() => {
+    setReferences([]);
+    setReferenceMode("reference");
+  }, [source?.id]);
   const [uploading, setUploading] = useState(false),
     [submitting, setSubmitting] = useState(false),
     [submitError, setSubmitError] = useState("");
@@ -434,6 +443,7 @@ export default function App() {
   }
   async function generate(event?: FormEvent) {
     event?.preventDefault();
+    if (submitting || uploading || uploadingReferences) return;
     setSubmitError("");
     if (!provider) {
       openSettings();
@@ -453,6 +463,13 @@ export default function App() {
     }
     setSubmitting(true);
     try {
+      if (mode === "edit" && source)
+        validateReferences(
+          provider,
+          source.id,
+          references.map((i) => i.id),
+          referenceMode,
+        );
       await submitCreation(
         {
           providerId,
@@ -462,6 +479,8 @@ export default function App() {
           ...sizeSettings,
           count,
           sourceId: mode === "edit" ? source?.id : undefined,
+          referenceIds: mode === "edit" ? references.map((i) => i.id) : [],
+          referenceMode: mode === "edit" ? referenceMode : "reference",
           maskId: mode === "edit" ? mask?.id : undefined,
           negativePrompt,
           seed,
@@ -1035,7 +1054,7 @@ export default function App() {
                     <ImagePlus size={18} /> 上传参考图片 <small>或拖放到这里</small>
                   </button>
                 )}
-                {source && provider?.type !== "xai" && (
+                {source && !references.length && provider?.type !== "xai" && (
                   <button
                     type="button"
                     className="mask-button"
@@ -1050,6 +1069,22 @@ export default function App() {
                   </span>
                 )}
               </div>
+            )}
+            {mode === "edit" && source && (
+              <ReferenceImages
+                key={source.id}
+                source={source}
+                provider={provider}
+                images={images}
+                value={references}
+                onChange={(value) => {
+                  setReferences(value);
+                  if (value.length) setMask(null);
+                }}
+                mode={referenceMode}
+                onMode={setReferenceMode}
+                onBusy={setUploadingReferences}
+              />
             )}
             <div className="prompt-row">
               <textarea
@@ -1259,7 +1294,12 @@ export default function App() {
                 <button
                   className="generate-button"
                   type="submit"
-                  disabled={submitting || uploading || (Boolean(provider) && !prompt.trim())}
+                  disabled={
+                    submitting ||
+                    uploading ||
+                    uploadingReferences ||
+                    (Boolean(provider) && !prompt.trim())
+                  }
                 >
                   {submitting ? <LoaderCircle size={17} className="spin" /> : <ArrowUp size={18} />}
                   <span>{provider ? "开始创作" : "连接模型"}</span>

@@ -97,7 +97,7 @@ test("detects separate outputs, optional image inputs, galleries and image edito
   );
   assert.equal(optional.supportsGenerate, true);
   assert.equal(optional.template.images, null);
-  assert.deepEqual(optional.editTemplate.images, [{ image: "{{image}}", caption: null }]);
+  assert.equal(optional.editTemplate.images, "{{gallery_images}}");
 });
 
 test("unknown required parameters, extra required images and OAuth requirements need review", () => {

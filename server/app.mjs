@@ -1,5 +1,6 @@
 import express from "express";
 import { resolveResolution } from "../shared/resolution.mjs";
+import { validateReferences } from "../shared/references.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import { randomUUID, randomBytes, timingSafeEqual, createHmac } from "node:crypto";
@@ -430,7 +431,7 @@ export function createApp(options = {}) {
       state.jobs.some(
         (j) =>
           ["queued", "running"].includes(j.status) &&
-          (j.sourceId === image.id || j.maskId === image.id),
+          (j.sourceId === image.id || j.maskId === image.id || j.referenceIds?.includes(image.id)),
       )
     )
       return res.status(409).json({ error: "此图片正用于生成任务，完成后可删除" });
@@ -483,6 +484,20 @@ export function createApp(options = {}) {
         mask.height !== source.height)
     )
       return res.status(400).json({ error: "蒙版尺寸必须与原图一致" });
+    const referenceIds = b.referenceIds ?? [];
+    const referenceMode = b.referenceMode ?? "reference";
+    if (mode === "edit") {
+      validateReferences(provider, source.id, referenceIds, referenceMode);
+      if (
+        referenceIds.some(
+          (id) => !state.images.some((i) => i.id === id && (!i.status || i.status === "succeeded")),
+        )
+      )
+        return res.status(400).json({ error: "参考图片不存在或尚未生成完成" });
+      if (referenceIds.length && b.maskId)
+        return res.status(400).json({ error: "多图编辑暂不支持同时使用蒙版" });
+    } else if (!Array.isArray(referenceIds) || referenceIds.length || referenceMode !== "reference")
+      return res.status(400).json({ error: "参考图片仅用于编辑模式" });
     const { ratio, width, height, resolution } = resolveResolution(b, provider.type);
     const guidance = Number(b.guidance ?? 3.5);
     if (!Number.isFinite(guidance) || guidance < 0 || guidance > 30)
@@ -511,6 +526,8 @@ export function createApp(options = {}) {
       negativePrompt: string(b.negativePrompt, 3000),
       mode,
       sourceId: mode === "edit" ? source?.id : undefined,
+      referenceIds: mode === "edit" ? referenceIds : [],
+      referenceMode,
       maskId: mode === "edit" ? mask?.id : undefined,
       ratio,
       resolution,
@@ -574,6 +591,20 @@ export function createApp(options = {}) {
       return res.status(400).json({ error: "参考图片已删除，无法重试" });
     if (previous.maskId && !state.images.some((i) => i.id === previous.maskId))
       return res.status(400).json({ error: "蒙版已删除，无法重试" });
+    if (previous.mode === "edit") {
+      validateReferences(
+        provider,
+        previous.sourceId,
+        previous.referenceIds || [],
+        previous.referenceMode || "reference",
+      );
+      if (
+        previous.referenceIds?.some(
+          (id) => !state.images.some((i) => i.id === id && (!i.status || i.status === "succeeded")),
+        )
+      )
+        return res.status(400).json({ error: "参考图片已删除，无法重试" });
+    }
     const job = {
       ...previous,
       id: randomUUID(),
@@ -632,6 +663,13 @@ export function createApp(options = {}) {
     try {
       const provider = state.providers.find((p) => p.id === job.providerId);
       if (!provider) throw new Error("提供商已删除");
+      if (job.mode === "edit")
+        validateReferences(
+          provider,
+          job.sourceId,
+          job.referenceIds || [],
+          job.referenceMode || "reference",
+        );
       key = store.open(provider.secret);
       const source = readImage(job.sourceId),
         mask = readImage(job.maskId);
@@ -646,7 +684,16 @@ export function createApp(options = {}) {
         provider.type === "mcp"
           ? mcpRunner(provider, key, job, source, mask, controller.signal)
           : provider.type === "gradio"
-            ? spaceRunner(provider, key, job, source, mask, controller.signal)
+            ? spaceRunner(
+                provider,
+                key,
+                job,
+                source,
+                mask,
+                controller.signal,
+                undefined,
+                (job.referenceIds || []).map(readImage),
+              )
             : compatibleRunner(provider, key, job, source, mask, controller.signal);
       const urls = await Promise.race([work, abortPromise]);
       if (!Array.isArray(urls) || !urls.length) throw new Error("提供商未返回图片，请重试");

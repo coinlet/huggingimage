@@ -61,12 +61,15 @@ test("Qwen AIO selects generation and single-image edit, leaves optional LoRAs b
   assert.equal(detected.outputPath, "0");
   assert.equal(detected.editOutputPath, "0");
   assert.equal(detected.template.mode, "Text to Image");
-  assert.equal(detected.editTemplate.mode, "Edit Image (1 Ref)");
+  assert.equal(detected.editTemplate.mode, "{{edit_mode}}");
   assert.equal(detected.template.ref_image_1, null);
   assert.equal(detected.editTemplate.ref_image_1, "{{image}}");
   for (const template of [detected.template, detected.editTemplate]) {
-    assert.equal(template.ref_image_2, null);
-    assert.deepEqual(template.multi_refs, []);
+    assert.equal(template.ref_image_2, template === detected.template ? null : "{{image2}}");
+    assert.deepEqual(
+      template.multi_refs,
+      template === detected.template ? [] : "{{gallery_images}}",
+    );
     assert.equal(template.enhance_mode, "Off");
     assert.equal(template.pe_api_key, "");
     assert.equal(template.pe_base_url, "");
@@ -80,7 +83,7 @@ test("Qwen AIO selects generation and single-image edit, leaves optional LoRAs b
         p.parameter_name,
       );
   }
-  assert.ok(detected.warnings.some((w) => w.includes("多图参考")));
+  assert.ok(detected.warnings.some((w) => w.includes("6 张参考图")));
   const result = await discoverConfiguration(api, "owner/model", {
     ai: { key: "test", baseUrl: "https://ai.test/v1", model: "test" },
     transport() {

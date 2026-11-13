@@ -67,7 +67,7 @@ OpenAI 模式提供标准的 1024×1024、1536×1024、1024×1536 尺寸，对�
 
 连接 Space 后，系统直接读取其原始 `/gradio_api/info`（旧版本按实际 API 前缀读取），保留模式、比例等枚举定义。使用 `{{aspect_ratio}}` 映射的比例会转换为 Space 要求的完整选项名称；选择上游不支持的比例会提示可选值，Space 只有固定比例时不会使用自定义宽高改变其输出尺寸。
 
-Qwen Image AIO 类型接口（同一 `/generate` 同时提供模式、参考图、LoRA 和提示词增强选项）会分别配置 `Text to Image` 文生图与 `Edit Image (1 Ref)` 单图编辑。未启用的自定义 LoRA 地址留空，提示词增强设为 `Off`，无需填写其额外的文本模型 Key；HF Token 仍填写在提供商凭证中。当前工作台仅提供一张参考图，不支持这个 Space 的 1–6 图参考与双图合成。已有连接需重新点击“自动读取并填写”并保存，才能更新模板。
+Qwen Image AIO 类型接口（同一 `/generate` 同时提供模式、参考图、LoRA 和提示词增强选项）会配置 `Text to Image` 文生图和动态编辑模式：单图使用 `Edit Image (1 Ref)`，2–6 图使用 `Multi-Image Reference (1-6 Refs)`，双图变换与合成使用 `Transform & Swap (2 Refs)`。未启用的自定义 LoRA 地址留空，提示词增强设为 `Off`，无需填写其额外的文本模型 Key；HF Token 仍填写在提供商凭证中。工作台的“参考图片”区域可批量上传图片或从已有作品添加；移动端连续编辑页在“设置”中操作。当前图固定为 Image 1，附加图按显示顺序编号，可前移或移除；提示词中可引用 Image 1、Image 2 等。最多 6 张（含当前图），双图变换与合成需恰好两张。参考图顺序与模式随任务保存到 SQLite，失败重试保留原输入和结果位置。多图编辑暂不支持蒙版。已有连接需重新点击“自动读取并填写”并保存，才能更新模板。
 
 **可选 AI 辅助**：在服务端 `.env` 配置一个支持 Chat Completions 和 JSON 输出的文本模型：
 
@@ -112,7 +112,11 @@ CONFIG_AI_API_KEY=your-ai-key
 | `{{prompt}}` | 正向提示词 |
 | `{{negative_prompt}}` | 反向提示词 |
 | `{{image}}` | 原图，通过 Gradio `handle_file` 上传 |
-| `{{images_b64_json}}` | 包含一张参考图 Data URI 的 JSON 字符串，适用于同名自定义输入 |
+| `{{images}}` | 全部参考图的文件对象数组，当前图排第一 |
+| `{{gallery_images}}` | 全部参考图的 Gallery 数组，每项为 `{image, caption: null}`；Qwen AIO 单图/双图变换模式留空 |
+| `{{image2}}` | 第二张参考图，用于双图输入 |
+| `{{edit_mode}}` | Qwen AIO 动态编辑模式，按数量与所选方式决定 |
+| `{{images_b64_json}}` | 包含全部参考图 Data URI 的 JSON 数组字符串，适用于同名自定义输入（Gradio） |
 | `{{image_base64}}` / `{{image_data_uri}}` | 原图的纯 Base64 / Data URI 字符串 |
 | `{{mask}}` | 可选蒙版文件，无蒙版时为 null |
 | `{{width}}` / `{{height}}` | 比例对应像素尺寸 |

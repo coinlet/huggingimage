@@ -13,7 +13,7 @@ export function encodedImageVariable(name) {
   return null;
 }
 export function usesSourceImage(value) {
-  return /\{\{(?:image|image_base64|image_data_uri|images_b64_json)\}\}/.test(
+  return /\{\{(?:image|image2|images|gallery_images|image_base64|image_data_uri|images_b64_json)\}\}/.test(
     JSON.stringify(value),
   );
 }

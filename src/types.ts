@@ -50,6 +50,8 @@ export type ImageItem = {
   name?: string;
 };
 export type Job = {
+  referenceIds?: string[];
+  referenceMode?: "reference" | "swap";
   id: string;
   sourceId?: string;
   slotIds?: string[];
@@ -110,6 +112,8 @@ export type SpaceDiscovery = {
 };
 
 export type CreationInput = {
+  referenceIds?: string[];
+  referenceMode?: "reference" | "swap";
   resolution?: string;
   width?: number;
   height?: number;
@@ -151,6 +155,8 @@ export type McpDiscovery = {
 };
 
 export type CreationSettings = {
+  referenceIds?: string[];
+  referenceMode?: "reference" | "swap";
   ratio: string;
   count: number;
   negativePrompt: string;
