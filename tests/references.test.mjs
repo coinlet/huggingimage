@@ -264,6 +264,16 @@ test("jobs retain reference order through SQLite restart and retry, protect acti
     assert.equal(observed[1].refs.length, 2);
     const versions = (await fx.call(`/api/images/${a.id}/thread`)).data;
     const result = versions.find((i) => i.id === submitted.data.slotIds[0]);
+    assert.deepEqual(
+      versions.map((i) => i.id),
+      [a.id, c.id, b.id, result.id],
+    );
+    assert.equal(versions[1].referenceContext.number, 2);
+    assert.equal(versions[2].referenceContext.number, 3);
+    assert.equal(versions[1].referenceContext.resultId, result.id);
+    assert.equal(versions[1].referenceContext.prompt, "combine in order");
+    const groups = (await fx.call("/api/image-groups")).data;
+    assert.equal(groups.find((group) => group.id === a.id).versionCount, 2);
     assert.equal(result.parentId, a.id);
     assert.equal(result.threadId, a.threadId || a.id);
   } finally {
@@ -301,6 +311,87 @@ test("job API rejects invalid references and retry fails clearly when a referenc
     const retry = await fx.call(`/api/images/${job.slotIds[0]}/retry`, "POST");
     assert.equal(retry.status, 400);
     assert.match(retry.data.error, /参考图片已删除/);
+  } finally {
+    await fx.close();
+  }
+});
+
+test("replaced main inputs and edits of imported references stay in the workbench group through retry", async () => {
+  let replacementAttempts = 0;
+  const received = [];
+  const fx = await fixture(
+    async (_provider, _key, job, source, _mask, _signal, _connector, refs) => {
+      received.push({ prompt: job.prompt, source, refs });
+      if (job.prompt === "replacement" && replacementAttempts++ === 0)
+        throw new Error("temporary failure");
+      return [`data:image/png;base64,${source.toString("base64")}`];
+    },
+  );
+  try {
+    const [a, b, c] = fx.uploads;
+    const original = (
+      await fx.call("/api/jobs", "POST", {
+        providerId: fx.provider.id,
+        mode: "edit",
+        sourceId: a.id,
+        referenceIds: [b.id],
+        prompt: "original",
+      })
+    ).data;
+    assert.equal((await fx.wait(original.id)).status, "succeeded");
+    const other = (
+      await fx.call("/api/jobs", "POST", {
+        providerId: fx.provider.id,
+        mode: "edit",
+        sourceId: c.id,
+        prompt: "other history",
+      })
+    ).data;
+    assert.equal((await fx.wait(other.id)).status, "succeeded");
+    const before = (await fx.call(a.url)).bytes;
+    const replaced = await fx.call("/api/jobs", "POST", {
+      providerId: fx.provider.id,
+      mode: "edit",
+      sourceId: c.id,
+      referenceIds: [b.id],
+      threadAnchorId: a.id,
+      prompt: "replacement",
+    });
+    assert.equal(replaced.status, 202);
+    assert.equal((await fx.wait(replaced.data.id)).status, "failed");
+    fx.restart();
+    const retry = (await fx.call(`/api/images/${replaced.data.slotIds[0]}/retry`, "POST")).data;
+    assert.equal(retry.threadAnchorId, a.id);
+    assert.equal(retry.sourceId, c.id);
+    assert.equal((await fx.wait(retry.id)).status, "succeeded");
+    const history = (await fx.call(`/api/images/${a.id}/thread`)).data;
+    const result = history.find((image) => image.id === retry.slotIds[0]);
+    assert.equal(result.threadId, a.id);
+    assert.equal(result.parentId, c.id);
+    assert.equal(history.find((image) => image.id === c.id).referenceContext.number, 1);
+    assert.ok(history.some((image) => image.id === original.slotIds[0]));
+    assert.ok(!history.some((image) => image.id === other.slotIds[0]));
+    assert.deepEqual((await fx.call(a.url)).bytes, before);
+    assert.deepEqual(received[2].source, received[3].source);
+    assert.deepEqual(received[2].refs, received[3].refs);
+    const bad = await fx.call("/api/jobs", "POST", {
+      providerId: fx.provider.id,
+      mode: "edit",
+      sourceId: a.id,
+      threadAnchorId: "missing",
+      prompt: "invalid",
+    });
+    assert.equal(bad.status, 400);
+    assert.equal(
+      (
+        await fx.call("/api/jobs", "POST", {
+          providerId: fx.provider.id,
+          threadAnchorId: a.id,
+          prompt: "invalid",
+        })
+      ).status,
+      400,
+    );
   } finally {
     await fx.close();
   }

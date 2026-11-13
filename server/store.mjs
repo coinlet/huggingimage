@@ -137,7 +137,17 @@ export function createStore(directory) {
         }
     }
   save();
-  return { state, save, seal, open, directory, close: () => db.close() };
+  function getSetting(key) {
+    const row = db.prepare("SELECT value FROM metadata WHERE key=?").get(`setting:${key}`);
+    return row ? JSON.parse(row.value) : null;
+  }
+  function setSetting(key, value) {
+    db.prepare("INSERT OR REPLACE INTO metadata(key,value) VALUES(?,?)").run(
+      `setting:${key}`,
+      JSON.stringify(value),
+    );
+  }
+  return { state, save, seal, open, directory, getSetting, setSetting, close: () => db.close() };
 }
 export function publicProvider(provider) {
   const { secret, ...safe } = provider;

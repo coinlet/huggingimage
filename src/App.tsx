@@ -44,6 +44,7 @@ import { AssetBrowser } from "./AssetBrowser";
 import { Modal } from "./Modal";
 import { ImageThread } from "./ImageThread";
 import { ReferenceImages } from "./ReferenceImages";
+import { ReferenceGallery } from "./ReferenceGallery";
 import { validateReferences } from "../shared/references.mjs";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 import { newImageId } from "./image-id";
@@ -52,13 +53,14 @@ import { usePageScrollLock } from "./usePageScrollLock";
 import { ResolutionControl } from "./ResolutionControl";
 import { resolveResolution, type SizeSettings } from "../shared/resolution.mjs";
 
-type View = "explore" | "library" | "favorites" | "history" | "assets";
+type View = "explore" | "library" | "favorites" | "history" | "assets" | "references";
 const viewLabels = {
   explore: "灵感广场",
   library: "我的作品",
   favorites: "我的收藏",
   history: "生成记录",
   assets: "素材库",
+  references: "角色参考",
 };
 const styles = ["全部", "自然", "摄影", "梦境", "建筑"];
 const statusLabels = {
@@ -125,15 +127,23 @@ export default function App() {
     [seed, setSeed] = useState(""),
     [steps, setSteps] = useState(28),
     [guidance, setGuidance] = useState(3.5);
-  const [source, setSource] = useState<ImageItem | null>(null),
+  const [source, setSourceImage] = useState<ImageItem | null>(null),
     [mask, setMask] = useState<ImageItem | null>(null);
   const [references, setReferences] = useState<ImageItem[]>([]);
   const [referenceMode, setReferenceMode] = useState<"reference" | "swap">("reference");
   const [uploadingReferences, setUploadingReferences] = useState(false);
-  useEffect(() => {
-    setReferences([]);
-    setReferenceMode("reference");
-  }, [source?.id]);
+  function setSource(image: ImageItem | null) {
+    if (image?.id !== source?.id) {
+      setReferences([]);
+      setReferenceMode("reference");
+    }
+    setSourceImage(image);
+  }
+  const [recipeDraft, setRecipeDraft] = useState<{
+    sourceId: string;
+    prompt: string;
+    images: ImageItem[];
+  } | null>(null);
   const [uploading, setUploading] = useState(false),
     [submitting, setSubmitting] = useState(false),
     [submitError, setSubmitError] = useState("");
@@ -320,9 +330,15 @@ export default function App() {
       reference ||
       images.find((i) => i.id === input.sourceId) ||
       (source?.id === input.sourceId ? source : null);
+    const threadAnchor = input.threadAnchorId
+      ? images.find((image) => image.id === input.threadAnchorId) ||
+        (detail?.id === input.threadAnchorId ? detail : null)
+      : null;
     const threadId =
       images.find((i) => i.id === ids[0])?.threadId ||
-      (input.mode === "edit" ? parent?.threadId || parent?.id || ids[0] : ids[0]);
+      (input.mode === "edit"
+        ? threadAnchor?.threadId || threadAnchor?.id || parent?.threadId || parent?.id || ids[0]
+        : ids[0]);
     const drafts: ImageItem[] = ids.map((id) => ({
       id,
       url: "",
@@ -594,6 +610,7 @@ export default function App() {
               ["favorites", Heart],
               ["history", History],
               ["assets", Folder],
+              ["references", Layers2],
             ] as const
           ).map(([key, Icon]) => (
             <button
@@ -688,7 +705,26 @@ export default function App() {
           </div>
         </header>
         <div className="main-content">
-          {view === "assets" ? (
+          <ReferenceGallery
+            active={view === "references"}
+            onTransfer={(imported, recipePrompt) => {
+              if (!imported.length) return;
+              setSource(imported[0]);
+              setMask(null);
+              setMode("edit");
+              setPrompt(recipePrompt);
+              setReferences(imported.slice(1));
+              setReferenceMode("reference");
+              setRecipeDraft({ sourceId: imported[0].id, prompt: recipePrompt, images: imported });
+              setDetail(imported[0]);
+              setThreadJob("");
+              setFocusImageId(imported[0].id);
+              setView("library");
+              setSubmitError("");
+              notify(`已带入 ${imported.length} 张原图和合成提示词，确认模型后继续编辑`);
+            }}
+          />
+          {view === "references" ? null : view === "assets" ? (
             <AssetBrowser
               onManage={() => openSettings("libraries")}
               onUse={(image) => {
@@ -981,7 +1017,7 @@ export default function App() {
         <div
           className="composer-dock"
           ref={composerDock}
-          style={view === "assets" ? { display: "none" } : undefined}
+          style={view === "assets" || view === "references" ? { display: "none" } : undefined}
         >
           <form
             className={`composer ${mode === "edit" ? "editing" : ""}`}
@@ -1353,10 +1389,12 @@ export default function App() {
           sizeSettings={sizeSettings}
           onSizeSettings={setSizeSettings}
           initialSettings={{ ratio, count, negativePrompt, seed, steps, guidance }}
+          initialDraft={recipeDraft?.sourceId === detail.id ? recipeDraft : undefined}
           followJob={threadJob}
           onProvider={setProviderId}
           onClose={() => {
             setDetail(null);
+            setRecipeDraft(null);
             setThreadJob("");
           }}
           onEdit={editInThread}
@@ -1370,7 +1408,10 @@ export default function App() {
             setSource(image);
             setMask(null);
             setMode("edit");
-            setPrompt("");
+            if (recipeDraft?.sourceId === image.id) {
+              setPrompt(recipeDraft.prompt);
+              setReferences(recipeDraft.images.slice(1));
+            } else setPrompt("");
             setAdvanced(true);
             setDetail(null);
             setThreadJob("");

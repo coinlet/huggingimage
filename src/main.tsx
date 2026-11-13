@@ -6,6 +6,8 @@ import "./mobile.css";
 import "./assets.css";
 import "./image-zoom.css";
 import "./references.css";
+import "./reference-gallery.css";
+import "./image-actions.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />

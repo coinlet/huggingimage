@@ -1,0 +1,68 @@
+.thread-image-open {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.thread-image-actions.icon-button {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 2;
+  min-width: 44px;
+  min-height: 44px;
+  color: #e4efd9;
+  background: #172012d9;
+  border: 1px solid #46553b;
+}
+.modal.thread-image-menu {
+  width: min(420px, 100%);
+  height: auto;
+  max-height: 85dvh;
+  display: grid;
+  gap: 14px;
+}
+.thread-image-menu > img {
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #10160c;
+}
+.thread-image-menu > button {
+  width: 100%;
+  justify-content: center;
+  min-height: 44px;
+}
+.thread-image-menu p {
+  margin: 0;
+  line-height: 1.7;
+}
+.modal.thread-asset-picker {
+  width: min(1050px, 100%);
+  max-width: 1050px;
+  height: min(90dvh, 950px);
+  overflow: auto;
+}
+.thread-asset-picker .asset-browser {
+  padding: 0;
+}
+@media (max-width: 700px) {
+  .thread-action-backdrop {
+    align-items: flex-end;
+    padding: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .modal.thread-image-menu {
+    max-height: calc(var(--viewport-height, 100dvh) - 24px);
+    height: auto;
+    border-radius: 18px;
+    padding: 18px;
+  }
+  .modal.thread-asset-picker {
+    height: 100%;
+  }
+  .thread-image-actions.icon-button {
+    bottom: 8px;
+    left: 8px;
+  }
+}

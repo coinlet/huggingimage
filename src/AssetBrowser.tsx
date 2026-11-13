@@ -32,11 +32,13 @@ export function AssetBrowser({
   onSaved,
   onUse,
   onManage,
+  useLabel = "编辑这张图片",
 }: {
   image?: ImageItem;
   onSaved?: () => void;
   onUse?: (image: ImageItem) => void;
   onManage: () => void;
+  useLabel?: string;
 }) {
   const [libraries, setLibraries] = useState<AssetLibrary[]>([]);
   const [libraryId, setLibraryId] = useState(
@@ -476,7 +478,7 @@ export function AssetBrowser({
                 onClick={() => useImage(preview)}
               >
                 <ImagePlus size={16} />
-                编辑这张图片
+                {useLabel}
               </button>
             )}
           </div>

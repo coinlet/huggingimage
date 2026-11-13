@@ -12,6 +12,8 @@ import { discoverConfiguration } from "./space-discovery.mjs";
 import { repairEncodedEditProvider } from "./gradio-images.mjs";
 import { runMcp, inspectMcp, mcpAuthHeaders } from "./mcp-provider.mjs";
 import { mountLibraries } from "./libraries.mjs";
+import { imageThread } from "./image-thread.mjs";
+import { mountReferenceGallery } from "./reference-gallery.mjs";
 
 export function createApp(options = {}) {
   const adminToken = options.adminToken ?? process.env.ADMIN_TOKEN ?? "";
@@ -110,6 +112,13 @@ export function createApp(options = {}) {
     next();
   });
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  mountReferenceGallery(app, {
+    store,
+    root: options.referenceGalleryDir,
+    catalog: options.referenceCatalog,
+    transport: options.referenceTransport,
+    saveImage,
+  });
   app.get("/api/providers", (_req, res) => res.json(state.providers.map(publicProvider)));
   function string(value, max = 1000) {
     return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -369,7 +378,7 @@ export function createApp(options = {}) {
   app.get("/api/images/:id/thread", (req, res) => {
     const image = state.images.find((i) => i.id === req.params.id);
     if (!image) return res.status(404).json({ error: "图片不存在" });
-    res.json(state.images.filter((i) => i.threadId === image.threadId));
+    res.json(imageThread(state, image));
   });
   async function saveImage(bytes, metadata = {}) {
     if (!bytes.length || bytes.length > 32 * 1024 * 1024) throw new Error("图片为空或超过 32MB");
@@ -485,6 +494,11 @@ export function createApp(options = {}) {
     )
       return res.status(400).json({ error: "蒙版尺寸必须与原图一致" });
     const referenceIds = b.referenceIds ?? [];
+    const threadAnchor = b.threadAnchorId
+      ? state.images.find((image) => image.id === b.threadAnchorId)
+      : null;
+    if (b.threadAnchorId && (mode !== "edit" || !threadAnchor))
+      return res.status(400).json({ error: "编辑工作台所属的图片分组不存在，请重新打开工作台" });
     const referenceMode = b.referenceMode ?? "reference";
     if (mode === "edit") {
       validateReferences(provider, source.id, referenceIds, referenceMode);
@@ -526,6 +540,7 @@ export function createApp(options = {}) {
       negativePrompt: string(b.negativePrompt, 3000),
       mode,
       sourceId: mode === "edit" ? source?.id : undefined,
+      threadAnchorId: threadAnchor?.id,
       referenceIds: mode === "edit" ? referenceIds : [],
       referenceMode,
       maskId: mode === "edit" ? mask?.id : undefined,
@@ -545,7 +560,10 @@ export function createApp(options = {}) {
       createdAt: new Date().toISOString(),
       imageIds: [],
     };
-    const threadId = mode === "edit" ? source.threadId || source.id : slotIds[0];
+    const threadId =
+      mode === "edit"
+        ? threadAnchor?.threadId || threadAnchor?.id || source.threadId || source.id
+        : slotIds[0];
     for (const id of slotIds)
       state.images.push({
         id,

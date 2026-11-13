@@ -24,6 +24,13 @@ export type Provider = {
   extra?: Record<string, unknown>;
 };
 export type ImageItem = {
+  referenceInput?: {
+    number: number;
+    slot: "portrait" | "costume" | "pose";
+    catalogId: string;
+    variant: string;
+  };
+  referenceContext?: { jobId: string; resultId: string; number: number; prompt: string };
   id: string;
   url: string;
   thumbnail: string;
@@ -112,6 +119,7 @@ export type SpaceDiscovery = {
 };
 
 export type CreationInput = {
+  threadAnchorId?: string;
   referenceIds?: string[];
   referenceMode?: "reference" | "swap";
   resolution?: string;
@@ -155,6 +163,7 @@ export type McpDiscovery = {
 };
 
 export type CreationSettings = {
+  threadAnchorId?: string;
   referenceIds?: string[];
   referenceMode?: "reference" | "swap";
   ratio: string;

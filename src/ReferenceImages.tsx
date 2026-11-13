@@ -12,6 +12,7 @@ export function ReferenceImages({
   mode,
   onMode,
   onBusy,
+  onReplace,
 }: {
   source: ImageItem;
   provider?: Provider;
@@ -21,6 +22,7 @@ export function ReferenceImages({
   mode: "reference" | "swap";
   onMode: (value: "reference" | "swap") => void;
   onBusy: (value: boolean) => void;
+  onReplace?: (image: ImageItem) => void;
 }) {
   const support = referenceSupport(provider);
   const [busy, setBusy] = useState(false),
@@ -107,6 +109,16 @@ export function ReferenceImages({
               Image {index + 1}
               {index === 0 ? " · 当前图" : ""}
             </span>
+            {onReplace && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onReplace(image)}
+                aria-label={`替换 Image ${index + 1}`}
+              >
+                替换
+              </button>
+            )}
             {index > 0 && (
               <div>
                 {index > 1 && (

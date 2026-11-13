@@ -1,0 +1,11 @@
+# Optional read-only mount of the ai-pose-gallery-zh image pack.
+# docker compose -f compose.yaml -f compose.references.yaml up -d
+services:
+  imagine:
+    environment:
+      REFERENCE_GALLERY_DIR: /app/reference-gallery
+    volumes:
+      - type: bind
+        source: ${REFERENCE_GALLERY_HOST_DIR:?Set REFERENCE_GALLERY_HOST_DIR to the folder containing img and thumbs}
+        target: /app/reference-gallery
+        read_only: true

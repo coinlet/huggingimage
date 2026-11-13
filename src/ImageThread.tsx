@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,11 +10,15 @@ import {
   Settings2,
   ImagePlus,
   FolderPlus,
+  MoreHorizontal,
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 import { ImageZoomViewer } from "./ImageZoomViewer";
 import { ReferenceImages } from "./ReferenceImages";
+import { AssetBrowser } from "./AssetBrowser";
+import { ImagePress } from "../shared/image-press.mjs";
+import { applyInputReplacements, replacementSlotId } from "../shared/input-replacements.mjs";
 import { validateReferences } from "../shared/references.mjs";
 import { CreationOptions, validateCreationSettings } from "./CreationOptions";
 import { useMobileScreen } from "./useMobileScreen";
@@ -30,6 +34,7 @@ type Props = {
   providerId: string;
   sizeSettings: SizeSettings;
   initialSettings: CreationSettings;
+  initialDraft?: { sourceId: string; prompt: string; images: ImageItem[] };
   onSizeSettings: (value: SizeSettings) => void;
   followJob?: string;
   onProvider: (id: string) => void;
@@ -50,12 +55,22 @@ export function ImageThread(props: Props) {
   const [zoomedImage, setZoomedImage] = useState<ImageItem | null>(null);
   const zoomActive = useRef(false);
   zoomActive.current = Boolean(zoomedImage);
-  const imageTap = useRef({ pointerId: -1, x: 0, y: 0, moved: false });
+  const imagePress = useRef(new ImagePress());
+  const [actionImage, setActionImage] = useState<ImageItem | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<ImageItem | null>(null);
+  const [replacements, setReplacements] = useState<Record<string, ImageItem>>({});
+  const [editingReference, setEditingReference] = useState<string | null>(null);
+  const preserveSelection = useRef(false);
+  const submittedReplacements = useRef<string | null>(null);
+  useEffect(() => () => imagePress.current.cancel(), []);
   const provider = props.providers.find((p) => p.id === props.providerId);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [optionError, setOptionError] = useState("");
   const [uploadingMask, setUploadingMask] = useState(false);
-  const [references, setReferences] = useState<ImageItem[]>([]);
+  const [references, setReferences] = useState<ImageItem[]>(
+    () => props.initialDraft?.images.slice(1) || [],
+  );
+  const compositionBase = useRef(props.image.id);
   const [uploadingReferences, setUploadingReferences] = useState(false);
   const [referenceMode, setReferenceMode] = useState<"reference" | "swap">("reference");
   const [mask, setMask] = useState<{ sourceId: string; image: ImageItem } | null>(null);
@@ -75,9 +90,15 @@ export function ImageThread(props: Props) {
           : previous.ratio,
     }));
   }, [props.providerId, provider?.defaults?.edit?.steps, provider?.defaults?.edit?.guidance]);
-  const [items, setItems] = useState<ImageItem[]>([props.image]);
+  const [threadItems, setItems] = useState<ImageItem[]>(
+    () => props.initialDraft?.images || [props.image],
+  );
+  const items = useMemo(
+    () => applyInputReplacements(threadItems, replacements),
+    [threadItems, replacements],
+  );
   const [selected, setSelected] = useState(props.image.id);
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(props.initialDraft?.prompt || "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -96,17 +117,36 @@ export function ImageThread(props: Props) {
     items.findIndex((i) => i.id === selected),
   );
   const current = items[index];
+  const referencePreview = Boolean(
+    (current.referenceContext ||
+      (current.id !== compositionBase.current &&
+        references.some((image) => image.id === current.id))) &&
+    editingReference !== current.id,
+  );
+  const visiblePrompt = current.referenceContext?.prompt || current.prompt;
   const ready = !current.status || current.status === "succeeded";
   const failed = current.status === "failed" || current.status === "cancelled";
   const currentJob = props.jobs.find((j) => j.id === current.jobId);
   const currentActive = currentJob && ["queued", "running"].includes(currentJob.status);
   const position = useRef({ items, selected });
+  const previousSelection = useRef(selected);
   position.current = { items, selected };
   useEffect(() => {
     setConfirmDelete(false);
     setMask(null);
-    setReferences([]);
-    setReferenceMode("reference");
+    if (previousSelection.current !== selected) {
+      const draftInputIds = [compositionBase.current, ...references.map((image) => image.id)];
+      const browsingDraftInputs =
+        draftInputIds.includes(selected) && draftInputIds.includes(previousSelection.current);
+      if (!browsingDraftInputs && !preserveSelection.current) {
+        setReferences([]);
+        setReferenceMode("reference");
+        compositionBase.current = selected;
+      }
+      if (!preserveSelection.current) setEditingReference(null);
+      preserveSelection.current = false;
+      previousSelection.current = selected;
+    }
     setOptionError("");
   }, [selected]);
   useEffect(() => {
@@ -114,7 +154,7 @@ export function ImageThread(props: Props) {
     const running = props.jobs.find(
       (job) =>
         ["queued", "running"].includes(job.status) &&
-        items.some((image) => image.id === job.sourceId),
+        items.some((image) => !image.referenceContext && image.id === job.sourceId),
     );
     if (running) setPendingId(running.id);
   }, [props.jobs, items, pendingId]);
@@ -131,7 +171,16 @@ export function ImageThread(props: Props) {
     if (!anchor.localDraft) {
       api<ImageItem[]>(`/images/${props.image.id}/thread`)
         .then((data) => {
-          if (!disposed) setItems(mergeLocal(data));
+          if (!disposed) {
+            setItems(mergeLocal(data));
+            if (
+              submittedReplacements.current &&
+              data.some((image) => image.jobId === submittedReplacements.current)
+            ) {
+              setReplacements({});
+              submittedReplacements.current = null;
+            }
+          }
         })
         .catch((e) => {
           if (!disposed) setError(e.message);
@@ -163,6 +212,58 @@ export function ImageThread(props: Props) {
     setSelected(items[slide].id);
     track.current?.scrollTo({ left: track.current.clientWidth * slide, behavior: "smooth" });
   }
+  function openReplacement(image: ImageItem) {
+    imagePress.current.cancel();
+    setActionImage(null);
+    setOptionsOpen(false);
+    setReplaceTarget(image);
+  }
+  function replaceImage(target: ImageItem, replacement: ImageItem) {
+    if (busy || active || currentActive || uploadingReferences || uploadingMask) {
+      setError("请等待当前任务结束后再替换参考图");
+      setReplaceTarget(null);
+      return;
+    }
+    const slotId = replacementSlotId(replacements, target.id);
+    const existingSlot = threadItems.some((image) => image.id === slotId);
+    if (!existingSlot && !references.some((image) => image.id === target.id)) {
+      setError("这张图片已不在当前工作台中，请重新选择");
+      setReplaceTarget(null);
+      return;
+    }
+    if (existingSlot) setReplacements((all) => ({ ...all, [slotId]: replacement }));
+    if (compositionBase.current === target.id) compositionBase.current = replacement.id;
+    setReferences((all) => all.map((image) => (image.id === target.id ? replacement : image)));
+    setMask(null);
+    setError("");
+    setOptionError("");
+    setReplaceTarget(null);
+    if (selected === target.id) {
+      preserveSelection.current = true;
+      if (editingReference === target.id) setEditingReference(replacement.id);
+      focusSlide.current = replacement.id;
+      setSelected(replacement.id);
+    }
+  }
+  function editReference(image: ImageItem) {
+    if (busy || active || currentActive || uploadingReferences || uploadingMask) {
+      setError("请等待当前任务结束后再编辑参考图");
+      return;
+    }
+    imagePress.current.cancel();
+    setActionImage(null);
+    setOptionsOpen(false);
+    preserveSelection.current = selected !== image.id;
+    compositionBase.current = image.id;
+    setEditingReference(image.id);
+    setSelected(image.id);
+    focusSlide.current = image.id;
+    setReferences([]);
+    setReferenceMode("reference");
+    setMask(null);
+    setPrompt("");
+    setError("");
+  }
   useEffect(() => {
     const element = track.current;
     if (!element) return;
@@ -182,7 +283,16 @@ export function ImageThread(props: Props) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!prompt.trim() || busy || uploadingMask || uploadingReferences || active || !ready) return;
+    if (
+      !prompt.trim() ||
+      busy ||
+      uploadingMask ||
+      uploadingReferences ||
+      active ||
+      !ready ||
+      referencePreview
+    )
+      return;
     setBusy(true);
     setError("");
     try {
@@ -195,11 +305,13 @@ export function ImageThread(props: Props) {
       );
       const job = await props.onEdit(current, prompt.trim(), {
         ...settings,
+        threadAnchorId: props.image.id,
         referenceIds: references.map((i) => i.id),
         referenceMode,
         maskId: mask?.sourceId === current.id ? mask.image.id : undefined,
       });
       setPendingId(job.id);
+      submittedReplacements.current = job.id;
       setPrompt("");
     } catch (e) {
       setError((e as Error).message);
@@ -246,6 +358,8 @@ export function ImageThread(props: Props) {
       setUploadingMask(false);
     }
   }
+  let versionNumber = -1;
+  const versionNumbers = items.map((image) => (image.referenceContext ? -1 : ++versionNumber));
   const thumbnails = (
     <div className="thread-thumbnails" aria-label="全部版本">
       {items.map((image, i) => (
@@ -269,7 +383,15 @@ export function ImageThread(props: Props) {
           ) : (
             <img src={image.thumbnail} alt="" />
           )}
-          <span>{i === 0 ? "原图" : i}</span>
+          <span>
+            {image.referenceInput && image.referenceInput.number > 1
+              ? `参${image.referenceInput.number}`
+              : image.referenceContext
+                ? `参${image.referenceContext.number}`
+                : versionNumbers[i] === 0
+                  ? "原图"
+                  : versionNumbers[i]}
+          </span>
         </button>
       ))}
     </div>
@@ -277,19 +399,27 @@ export function ImageThread(props: Props) {
   const imageDetails = (
     <>
       <span className="eyebrow">YOUR CREATIVE JOURNEY</span>
-      <h3>{current.kind === "upload" ? "从这张原图开始" : "每一步想象，都在这里"}</h3>
+      <h3>
+        {current.referenceContext
+          ? `参考图 Image ${current.referenceContext.number}`
+          : current.kind === "upload"
+            ? "从这张原图开始"
+            : "每一步想象，都在这里"}
+      </h3>
       <div className="thread-prompt" aria-live="polite">
-        <label className="section-label">当前图片的提示词</label>
-        <p>{current.prompt || "上传原图，尚未使用提示词"}</p>
-        {current.prompt && (
+        <label className="section-label">
+          {current.referenceContext ? "使用此参考图的编辑提示词" : "当前图片的提示词"}
+        </label>
+        <p>{current.referenceContext?.prompt || current.prompt || "上传原图，尚未使用提示词"}</p>
+        {visiblePrompt && (
           <button
             type="button"
             className="text-button"
             onClick={() => {
               if (mobile) {
-                setPrompt(current.prompt);
+                setPrompt(visiblePrompt);
                 setOptionsOpen(false);
-              } else props.onUsePrompt(current);
+              } else props.onUsePrompt({ ...current, prompt: visiblePrompt });
             }}
           >
             复用此提示词
@@ -409,7 +539,7 @@ export function ImageThread(props: Props) {
   );
   const options = (
     <>
-      {ready && (
+      {ready && !referencePreview && (
         <ReferenceImages
           key={current.id}
           source={current}
@@ -423,6 +553,7 @@ export function ImageThread(props: Props) {
           mode={referenceMode}
           onMode={setReferenceMode}
           onBusy={setUploadingReferences}
+          onReplace={openReplacement}
         />
       )}
       <CreationOptions
@@ -436,7 +567,7 @@ export function ImageThread(props: Props) {
         onProvidersSettings={props.onSettings}
         expanded={mobile}
       />
-      {!references.length && provider?.type !== "xai" && (
+      {!referencePreview && !references.length && provider?.type !== "xai" && (
         <div className="thread-mask-settings">
           <label className="secondary-button">
             <ImagePlus size={16} />
@@ -473,7 +604,7 @@ export function ImageThread(props: Props) {
           disabled={!ready}
           onClick={() => props.onAdvanced(current)}
         >
-          返回完整创作面板
+          {current.referenceContext ? "以此参考图开始新创作" : "返回完整创作面板"}
         </button>
       )}
     </>
@@ -511,59 +642,90 @@ export function ImageThread(props: Props) {
                       preview={items.find((i) => i.id === image.parentId)?.thumbnail}
                     />
                   ) : (
-                    <button
-                      type="button"
-                      className="thread-image-open"
-                      aria-label="放大查看图片"
-                      tabIndex={image.id === selected ? 0 : -1}
-                      onPointerDown={(event) => {
-                        if (event.isPrimary)
-                          imageTap.current = {
-                            pointerId: event.pointerId,
+                    <>
+                      <button
+                        type="button"
+                        className="thread-image-open"
+                        aria-label="放大查看图片"
+                        tabIndex={image.id === selected ? 0 : -1}
+                        onPointerDown={(event) => {
+                          if (event.pointerType === "mouse" && event.button !== 0) return;
+                          if (event.isPrimary)
+                            imagePress.current.start(
+                              event.pointerId,
+                              { x: event.clientX, y: event.clientY },
+                              () => setActionImage(image),
+                            );
+                          else imagePress.current.cancel();
+                        }}
+                        onPointerMove={(event) => {
+                          imagePress.current.move(event.pointerId, {
                             x: event.clientX,
                             y: event.clientY,
-                            moved: false,
-                          };
-                        else imageTap.current.moved = true;
-                      }}
-                      onPointerMove={(event) => {
-                        if (
-                          imageTap.current.pointerId === event.pointerId &&
-                          Math.hypot(
-                            event.clientX - imageTap.current.x,
-                            event.clientY - imageTap.current.y,
-                          ) > 8
-                        )
-                          imageTap.current.moved = true;
-                      }}
-                      onPointerCancel={() => {
-                        imageTap.current.moved = true;
-                      }}
-                      onClick={(event) => {
-                        if (event.detail !== 0 && imageTap.current.moved) return;
-                        setSelected(image.id);
-                        const slide = items.findIndex((item) => item.id === image.id);
-                        track.current?.scrollTo({
-                          left: (track.current?.clientWidth || 0) * slide,
-                          behavior: "instant",
-                        });
-                        setZoomedImage(image);
-                      }}
-                    >
-                      <img
-                        src={image.url}
-                        alt={image.prompt || image.name || "原始图片"}
-                        draggable={false}
-                      />
-                      <span className="thread-image-zoom-hint">点击放大</span>
-                    </button>
+                          });
+                        }}
+                        onPointerUp={() => imagePress.current.stop()}
+                        onPointerLeave={() => {
+                          if (imagePress.current.active) imagePress.current.cancel();
+                        }}
+                        onPointerCancel={() => imagePress.current.cancel()}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          imagePress.current.cancel();
+                          setActionImage(image);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            imagePress.current.stop();
+                            imagePress.current.blocked = false;
+                          }
+                        }}
+                        onClick={(event) => {
+                          if (
+                            actionImage ||
+                            replaceTarget ||
+                            (event.detail !== 0 && imagePress.current.blocked)
+                          )
+                            return;
+                          setSelected(image.id);
+                          const slide = items.findIndex((item) => item.id === image.id);
+                          track.current?.scrollTo({
+                            left: (track.current?.clientWidth || 0) * slide,
+                            behavior: "instant",
+                          });
+                          setZoomedImage(image);
+                        }}
+                      >
+                        <img
+                          src={image.url}
+                          alt={image.prompt || image.name || "原始图片"}
+                          draggable={false}
+                        />
+                        <span className="thread-image-zoom-hint">轻点放大 · 长按操作</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="thread-image-actions icon-button"
+                        aria-label="图片操作：替换或编辑"
+                        onClick={() => {
+                          imagePress.current.cancel();
+                          setActionImage(image);
+                        }}
+                      >
+                        <MoreHorizontal size={20} />
+                      </button>
+                    </>
                   )}
                   <figcaption>
-                    {image.kind === "upload"
-                      ? "上传原图"
-                      : image.parentId
-                        ? `编辑版本 ${i}`
-                        : "初始作品"}
+                    {image.referenceInput
+                      ? `参考图 Image ${image.referenceInput.number}`
+                      : image.referenceContext
+                        ? `参考图 Image ${image.referenceContext.number}`
+                        : image.kind === "upload"
+                          ? "上传原图"
+                          : image.parentId
+                            ? `编辑版本 ${versionNumbers[i]}`
+                            : "初始作品"}
                   </figcaption>
                 </figure>
               ))}
@@ -596,12 +758,12 @@ export function ImageThread(props: Props) {
             {mobile && (
               <p className="mobile-current-prompt" aria-live="polite">
                 <span>当前提示词：</span>
-                {current.prompt || "上传原图"}
+                {visiblePrompt || "上传原图"}
               </p>
             )}
             <form className="thread-editor" onSubmit={submit}>
               <label className="section-label" htmlFor="thread-edit-prompt">
-                基于当前第 {index + 1} 张继续编辑
+                {referencePreview ? "正在查看参考输入" : `基于当前第 ${index + 1} 张继续编辑`}
                 {mask?.sourceId === current.id ? " · 蒙版已启用" : ""}
               </label>
               <textarea
@@ -612,8 +774,39 @@ export function ImageThread(props: Props) {
                 maxLength={6000}
                 rows={mobile ? 2 : 4}
                 required
-                disabled={busy || uploadingMask || !!active || !ready}
+                disabled={busy || uploadingMask || !!active || !ready || referencePreview}
               />
+              {(current.referenceContext || referencePreview) && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() =>
+                    navigate(
+                      items.findIndex(
+                        (image) =>
+                          image.id ===
+                          (replacements[
+                            current.referenceContext?.resultId || compositionBase.current
+                          ]?.id ||
+                            current.referenceContext?.resultId ||
+                            compositionBase.current),
+                      ),
+                    )
+                  }
+                >
+                  {current.referenceContext?.jobId ? "返回此任务的编辑结果" : "返回主参考图"}
+                </button>
+              )}
+              {referencePreview && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={busy || !!active}
+                  onClick={() => editReference(current)}
+                >
+                  单独编辑这张参考图
+                </button>
+              )}
               {!mobile && options}
               {error && (
                 <p className="thread-error" role="alert">
@@ -680,6 +873,7 @@ export function ImageThread(props: Props) {
                       uploadingReferences ||
                       !!active ||
                       !ready ||
+                      referencePreview ||
                       !prompt.trim() ||
                       !provider?.enabled ||
                       !provider.supportsEdit
@@ -707,6 +901,54 @@ export function ImageThread(props: Props) {
           image={zoomedImage}
           onClose={() => setZoomedImage(null)}
         />
+      )}
+      {actionImage && (
+        <Modal
+          title="图片操作"
+          className="thread-image-menu"
+          backdropClassName="thread-action-backdrop"
+          onClose={() => setActionImage(null)}
+        >
+          <img
+            src={actionImage.thumbnail || actionImage.url}
+            alt={actionImage.name || "当前图片"}
+          />
+          <button
+            type="button"
+            className="primary-button"
+            disabled={busy || !!active || !!currentActive || uploadingReferences || uploadingMask}
+            onClick={() => openReplacement(actionImage)}
+          >
+            <ImagePlus size={18} />
+            从素材库替换此图
+          </button>
+          {actionImage.referenceContext && (
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={busy || !!active}
+              onClick={() => editReference(actionImage)}
+            >
+              单独编辑这张参考图
+            </button>
+          )}
+          <p className="help-text">
+            替换会用于下一次编辑，保留提示词及其他参考图；已生成的结果和原图记录会保留。
+          </p>
+        </Modal>
+      )}
+      {replaceTarget && (
+        <Modal
+          title="从素材库选择替换图片"
+          className="thread-asset-picker"
+          onClose={() => setReplaceTarget(null)}
+        >
+          <AssetBrowser
+            useLabel="选择这张图片替换"
+            onManage={props.onSettings}
+            onUse={(image) => replaceImage(replaceTarget, image)}
+          />
+        </Modal>
       )}
       {mobile && optionsOpen && (
         <Modal
